@@ -115,6 +115,8 @@ class FigModel(nn.Module):
         self.tier = TrainingTier.STREAMING_LORA
         self._fig_layers = {}  # name → FigLinear mapping
         self._config = None
+        self._memory_fabric = None  # MemoryFabric if enabled
+        self._micro_trainer = None  # MicroTrainer if fabric enabled
     
     @staticmethod
     def from_pretrained(
@@ -132,6 +134,7 @@ class FigModel(nn.Module):
         ember_mode: bool = False,
         fuse_kernels: bool = True,
         shared_codebook: bool = False,
+        memory_fabric: bool = False,
     ) -> "FigModel":
         """
         Load a model with FigQuant INT4 quantized base weights + LoRA adapters.
@@ -344,16 +347,116 @@ class FigModel(nn.Module):
         print(f"   ✓ Trainable: {trainable:,} / {total:,} ({100*trainable/total:.2f}%)")
         print(f"   ✓ Base weights: {original_bytes/1e6:.1f} MB → {quantized_bytes/1e6:.1f} MB")
         
+        # Initialize Memory Fabric if requested
+        if memory_fabric:
+            from .memory_fabric import MemoryFabric
+            from .micro_trainer import MicroTrainer, MicroTrainConfig
+            
+            layer_configs = [
+                (name, layer.in_features, layer.out_features)
+                for name, layer in fig._fig_layers.items()
+            ]
+            fig._memory_fabric = MemoryFabric(layer_configs)
+            fig._micro_trainer = MicroTrainer(fig._memory_fabric)
+        
         return fig
     
     def forward(self, input_ids=None, attention_mask=None, labels=None, **kwargs):
-        """Forward pass — delegates to the underlying HF model."""
-        return self.model(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            labels=labels,
-            **kwargs,
+        """Forward pass — delegates to the underlying HF model.
+        If Memory Fabric is active, adds fabric adapter contributions
+        via hooks registered on FigLinear layers.
+        """
+        # If no fabric, standard forward
+        if self._memory_fabric is None:
+            return self.model(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                labels=labels,
+                **kwargs,
+            )
+        
+        # With fabric: register hooks to add memory contributions
+        hooks = []
+        
+        def make_hook(layer_name):
+            def hook_fn(module, input, output):
+                fabric_layer = self._memory_fabric.get_layer(layer_name)
+                if fabric_layer is not None:
+                    # input[0] is x — the layer's input activation
+                    x = input[0] if isinstance(input, tuple) else input
+                    if x.dim() == 2:
+                        x = x.unsqueeze(0)
+                    memory_delta = fabric_layer(x)
+                    # Add fabric contribution to layer output
+                    if output.dim() == 2:
+                        return output + memory_delta.squeeze(0)
+                    return output + memory_delta
+                return output
+            return hook_fn
+        
+        for name, fig_layer in self._fig_layers.items():
+            h = fig_layer.register_forward_hook(make_hook(name))
+            hooks.append(h)
+        
+        try:
+            result = self.model(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                labels=labels,
+                **kwargs,
+            )
+        finally:
+            # Always remove hooks
+            for h in hooks:
+                h.remove()
+        
+        return result
+    
+    # ── Memory Fabric API ─────────────────────────────────────────────────────
+    
+    def write_memory(self, namespace: str, text: str) -> dict:
+        """
+        Write a memory into the model's weights via micro-training.
+        The model will KNOW this information next forward pass.
+        
+        Args:
+            namespace: which memory region (personal/episodic/wiki/schedule/contested)
+            text: the information to remember
+            
+        Returns:
+            dict with training stats (loss improvement, time_ms)
+        """
+        if self._micro_trainer is None:
+            return {"error": "Memory Fabric not enabled. Use memory_fabric=True in from_pretrained()"}
+        
+        enc = self.tokenizer(text, return_tensors="pt", max_length=128,
+                             truncation=True, padding="max_length")
+        return self._micro_trainer.write_memory(
+            self, namespace, enc["input_ids"], enc["input_ids"]
         )
+    
+    def memory_decay(self, hours: float = 1.0):
+        """Apply time-based decay to memory adapters. Unused memories fade."""
+        if self._memory_fabric:
+            self._memory_fabric.apply_decay(hours)
+    
+    def memory_confidence(self) -> dict:
+        """Get confidence (adapter magnitude) per namespace."""
+        if self._memory_fabric:
+            return self._memory_fabric.get_confidence_map()
+        return {}
+    
+    def promote_memory(self, from_ns: str, to_ns: str):
+        """Promote knowledge from one namespace to another (e.g., episodic → wiki)."""
+        if self._micro_trainer:
+            self._micro_trainer.promote_memory(from_ns, to_ns)
+    
+    @property
+    def has_memory(self) -> bool:
+        """Whether Memory Fabric is active."""
+        return self._memory_fabric is not None
+    
+    # ── End Memory Fabric API ─────────────────────────────────────────────────
     
     def generate(self, **kwargs):
         """Generate text — delegates to the underlying HF model."""

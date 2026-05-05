@@ -30,7 +30,7 @@ class MicroTrainConfig:
     steps: int = 3               # 1-5 steps per memory write
     use_mezo: bool = False       # Use FigMeZO (no backward pass) if True
     mezo_epsilon: float = 1e-3
-    max_time_ms: float = 100.0   # Hard cap — abort if exceeding this
+    max_time_ms: float = 5000.0  # Hard cap — generous for CPU, tight for GPU
 
 
 class MicroTrainer:
