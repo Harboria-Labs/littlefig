@@ -1,6 +1,6 @@
 # Fig Engine: CPU-Native LLM Training via Adaptive Codebook Quantization and Cognitive Memory Embedding
 
-**Authors:** Sammie (@ticketguy)  
+**Authors:** 0xticketguy (Harboria Labs)  
 **Repository:** https://github.com/ticketguy/littlefig  
 **Version:** 0.6
 
@@ -385,4 +385,4 @@ The system treats the model not as a static artifact but as a living cognitive e
 
 *Code: https://github.com/ticketguy/littlefig*  
 *License: MIT*  
-*Built for Lila — a private family ASI assistant.*
+*Built for Lila — Harboria Labs.*
