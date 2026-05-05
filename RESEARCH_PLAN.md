@@ -126,3 +126,54 @@ RLM uses regex/slice (syntax). Ember uses semantics + structure + time.
 - Every claim backed by OUR OWN experiment
 - If it doesn't beat baseline in controlled test, it doesn't ship
 - Write findings BEFORE implementing changes
+
+---
+
+## Current Status After Experiments
+
+### Completed and Shipped:
+1. ✅ FigMeZO (−18.6% loss) — `figmezo.py`
+2. ✅ Sensitivity-guided LISA (−10% loss) — integrated into `lisa.py`
+3. ✅ Shared codebook (5× faster, 0.1% cost) — integrated into `model.py`
+4. ✅ GPU dtype fix — `linear.py`
+5. ✅ README + paper updated with results
+
+### Next: Ember Memory Training (Directions 4 & 5)
+
+**What exists:** `ember_integration.py` generates template-based training data.
+The model learns to emit `<|mem_store|>` etc. based on fixed patterns.
+
+**What's missing (from observation + the papers user shared):**
+
+1. **Goal-conditioned recall** (from Self-Memory System / Conway 2005):
+   Current training teaches "retrieve by topic similarity."
+   Should teach "retrieve by RELEVANCE TO CURRENT OBJECTIVE."
+   Example: if current goal is "plan a trip", recall travel preferences
+   even if the topic keyword isn't "travel" — maybe the user mentioned
+   hating long flights 3 months ago in a different conversation.
+
+2. **Episodic coherence** (from EM-LLM / Ember's own episodic module):
+   Current training treats each memory operation independently.
+   Should teach the model to reason about episode boundaries and
+   retrieve coherent episode chunks — not individual facts.
+
+3. **Conflict-aware reasoning** (from HaluMem / Ember's conflict module):
+   Current training teaches "flag conflict." Should teach the model
+   to REASON about which version to trust, based on recency, confidence,
+   and provenance — not just detect the contradiction.
+
+4. **Hierarchical retrieval** (from graph structure / Graphify):
+   Current recall is flat (vector similarity). Should teach the model
+   to navigate memory as a GRAPH — follow connections, traverse relationships,
+   find things by structure rather than just content similarity.
+
+**Next experiment to run:**
+- Generate GOAL-CONDITIONED training data where the correct memory to recall
+  is NOT the most semantically similar one, but the most TASK-RELEVANT one.
+- Train two models: one on current templates, one on goal-conditioned data.
+- Evaluate: given a goal + memory store, which model retrieves the right memory?
+
+This requires:
+- New training data generator in ember_integration.py
+- A small eval set with "goal + memories + correct_answer"
+- Two training runs, same model/config, different data
