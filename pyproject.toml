@@ -8,6 +8,7 @@ version = "0.6.0"
 description = "Little Fig: CPU-native LLM engine with FigQuant, FigKernel, FigPipeline, and Ember memory integration"
 readme = "READme.md"
 requires-python = ">=3.9"
+license = "AGPL-3.0-or-later"
 
 dependencies = [
     # NOTE: torch is NOT listed here intentionally.

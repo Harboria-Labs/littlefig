@@ -60,7 +60,7 @@ class DequantMatmul(torch.autograd.Function):
             shape=ctx.shape, n_groups=ctx.n_groups,
             group_size=ctx.group_size, numel=ctx.numel,
         )
-        W = figquant_dequantize(q).to(dtype=ctx.input_dtype)
+        W = figquant_dequantize(q).to(dtype=grad_output.dtype)
         grad_x = grad_output @ W
         return grad_x, None, None, None, None, None, None, None
 
