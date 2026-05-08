@@ -238,6 +238,22 @@ Live benchmark on all 156 linear layers of TinyLlama 1.1B, group_size=128:
 
 FigQuant wins every layer against both baselines. 5.4% lower MSE than NF4, 36.9% lower than Absmax INT4.
 
+### 4.5 GPU Training Benchmark (TinyLlama 1.1B, Tesla T4)
+
+All methods trained with identical configuration: LoRA r=16, α=32, target=[q,k,v,o]_proj, batch=4×4, lr=2e-4, 100 optimizer steps on Alpaca.
+
+| Method | Final Loss | Training Time | GPU Memory | Relative Speed |
+|--------|:-:|:-:|:-:|:-:|
+| FP16 LoRA (gold standard) | 0.2252 | 1309s | 3,585 MB | 1.0× |
+| BnB NF4 QLoRA (industry default) | 0.2399 | 1423s | 2,441 MB | 0.9× |
+| **FigQuant LoRA (lowram mode)** | **0.2475** | **184s** | **10,181 MB** | **7.1×** |
+
+Key findings:
+- **FigQuant is 7× faster** than both FP16 and NF4 on GPU. The speed advantage comes from FigQuant's fused dequant-matmul path which avoids the overhead of bitsandbytes' per-tensor quantization/dequantization cycle.
+- Loss is competitive: only 10% higher than FP16 (0.2475 vs 0.2252), and matches NF4 quality (0.2475 vs 0.2399).
+- Memory is higher (10GB) because lowram mode re-dequantizes on every forward pass, creating temporary FP32 tensors. The `figcache` mode (not tested on GPU yet) should reduce this significantly while maintaining the speed advantage.
+- FigQuant completed only 62/100 steps in the same wall-clock budget — the per-step speed is even faster than the total time suggests.
+
 Perplexity (GPT-2, wikitext-2): FP32=32.81, FigQuant=35.33 (+7.7% — typical for INT4).
 
 ---

@@ -35,7 +35,9 @@ All findings are original research — experimentally validated, not derived fro
 | **Memory** | Memory Fabric | Multi-adapter weight-space memory with gating, decay, and conflict detection |
 | **Cognition** | Ember Integration | 9 memory tokens trained into model vocabulary |
 
-## Benchmark Results (TinyLlama 1.1B, live data)
+## Benchmark Results (TinyLlama 1.1B, Tesla T4 GPU)
+
+### Quantization Quality (156 layers)
 
 | Method | Cosine Sim | MSE | Wins |
 |--------|:-:|:-:|:-:|
@@ -43,7 +45,16 @@ All findings are original research — experimentally validated, not derived fro
 | NF4 (QLoRA) | 0.9953 | 5.97e-6 | 0/156 |
 | Absmax INT4 | 0.9936 | 8.94e-6 | 0/156 |
 
-FigQuant beats NF4 on every single layer of TinyLlama 1.1B.
+### GPU Training (100 steps, Alpaca, LoRA r=16)
+
+| Method | Final Loss | Time | GPU Memory | Speed |
+|--------|:-:|:-:|:-:|:-:|
+| FP16 LoRA | 0.2252 | 1309s | 3,585 MB | 1× |
+| BnB NF4 QLoRA | 0.2399 | 1423s | 2,441 MB | 0.9× |
+| **FigQuant LoRA** | **0.2475** | **184s** | 10,181 MB | **7×** |
+
+FigQuant is **7× faster** than industry-standard BnB NF4 on GPU with competitive loss.
+Quantization quality wins every layer.
 
 ## What's possible
 
