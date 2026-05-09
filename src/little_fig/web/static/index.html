@@ -75,6 +75,7 @@ footer{display:none!important}
 
     <div class="label px-3 pt-4">Tools</div>
     <div class="sidebar-item" data-page="arena"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"/></svg>FigSpace</div>
+    <div class="sidebar-item" data-page="eval"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>Eval Suite</div>
     <div class="sidebar-item" data-page="bench"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>Benchmarks</div>
     <div class="sidebar-item" data-page="cogmem"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>CogMemBench</div>
     <div class="sidebar-item" data-page="ckpt"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>Checkpoints</div>
@@ -224,11 +225,11 @@ footer{display:none!important}
   <!-- ═══ FIGSPACE ═══ -->
   <div id="pg-arena" class="page hidden flex-1 overflow-y-auto p-6">
     <div class="max-w-5xl mx-auto space-y-8">
-      <div><h2 class="text-base font-bold text-purple-400">⚔️ FigSpace Arena</h2><p class="text-xs text-zinc-500 mt-1">Auto-chat · Side-by-side comparison · Standard LLM benchmarks</p></div>
+      <div><h2 class="text-base font-bold text-purple-400">⚔️ FigSpace Arena</h2><p class="text-xs text-zinc-500 mt-1">Self-talk · Side-by-side · Model vs Model</p></div>
 
-      <!-- ══ Section 1: Auto-Chat ══ -->
+      <!-- ══ Section 1: Self-Talk ══ -->
       <div class="space-y-3">
-        <div class="flex items-center justify-between"><div class="text-sm font-bold text-purple-400">🗣️ Auto-Chat</div><div class="text-[10px] text-zinc-600">Model talks to itself — observe the conversation</div></div>
+        <div class="flex items-center justify-between"><div class="text-sm font-bold text-purple-400">🗣️ Self-Talk</div><div class="text-[10px] text-zinc-600">Model talks to itself — observe the conversation</div></div>
         <div class="card space-y-3">
           <div class="grid grid-cols-3 gap-3">
             <div class="col-span-2"><label class="text-[11px] text-zinc-500">Starting topic</label><input id="ac-topic" class="input mt-1 text-xs" value="What's the most interesting unsolved problem in science?"></div>
@@ -236,11 +237,11 @@ footer{display:none!important}
           </div>
           <details class="text-[11px]"><summary class="text-zinc-500 cursor-pointer hover:text-zinc-300">System prompts (advanced)</summary>
             <div class="grid grid-cols-2 gap-3 mt-2">
-              <div><label class="text-[10px] text-zinc-600">Model A (assistant)</label><textarea id="ac-sys-a" class="input mt-1 text-[11px]" rows="2">You are a helpful, thoughtful AI assistant. Respond conversationally.</textarea></div>
-              <div><label class="text-[10px] text-zinc-600">Model B (curious human)</label><textarea id="ac-sys-b" class="input mt-1 text-[11px]" rows="2">You are a curious, intelligent human having a conversation. Ask follow-up questions and share your thoughts.</textarea></div>
+              <div><label class="text-[10px] text-zinc-600">Role A (assistant)</label><textarea id="ac-sys-a" class="input mt-1 text-[11px]" rows="2">You are a helpful, thoughtful AI assistant. Respond conversationally.</textarea></div>
+              <div><label class="text-[10px] text-zinc-600">Role B (curious human)</label><textarea id="ac-sys-b" class="input mt-1 text-[11px]" rows="2">You are a curious, intelligent human having a conversation. Ask follow-up questions and share your thoughts.</textarea></div>
             </div>
           </details>
-          <button onclick="startAutoChat()" id="ac-btn" class="btn btn-primary btn-sm">▶ Start Auto-Chat</button>
+          <button onclick="startAutoChat()" id="ac-btn" class="btn btn-primary btn-sm">▶ Start Self-Talk</button>
         </div>
         <div id="ac-messages" class="space-y-2 max-h-96 overflow-y-auto"></div>
       </div>
@@ -249,10 +250,10 @@ footer{display:none!important}
 
       <!-- ══ Section 2: Side-by-Side Comparison ══ -->
       <div class="space-y-3">
-        <div class="text-sm font-bold text-purple-400">⚔️ Side-by-Side Comparison</div>
+        <div class="flex items-center justify-between"><div class="text-sm font-bold text-purple-400">⚔️ Side-by-Side Comparison</div><div class="text-[10px] text-zinc-600">Same prompt, different sampling — compare outputs</div></div>
         <div class="grid grid-cols-2 gap-4">
-          <div class="card space-y-2"><span class="badge badge-green text-[9px]">A · Precise (t=0.3)</span><div class="h-48 rounded-lg bg-black/20 border border-white/5 p-3 text-xs text-zinc-500 overflow-y-auto mt-2 leading-relaxed light:bg-zinc-100 light:border-zinc-200" id="arena-a">Send a prompt to compare responses</div></div>
-          <div class="card space-y-2"><span class="badge badge-amber text-[9px]">B · Creative (t=0.9)</span><div class="h-48 rounded-lg bg-black/20 border border-white/5 p-3 text-xs text-zinc-500 overflow-y-auto mt-2 leading-relaxed light:bg-zinc-100 light:border-zinc-200" id="arena-b">Send a prompt to compare responses</div></div>
+          <div class="card space-y-2"><span class="badge badge-green text-[9px]">A · Precise (t=0.3)</span><div class="h-48 rounded-lg bg-black/20 border border-white/5 p-3 text-xs text-zinc-500 overflow-y-auto mt-2 leading-relaxed light:bg-zinc-100 light:border-zinc-200" id="arena-a">Send a prompt to compare</div></div>
+          <div class="card space-y-2"><span class="badge badge-amber text-[9px]">B · Creative (t=0.9)</span><div class="h-48 rounded-lg bg-black/20 border border-white/5 p-3 text-xs text-zinc-500 overflow-y-auto mt-2 leading-relaxed light:bg-zinc-100 light:border-zinc-200" id="arena-b">Send a prompt to compare</div></div>
         </div>
         <div class="flex gap-2 items-end">
           <textarea id="arena-prompt" class="input flex-1 text-sm" rows="2" placeholder="Enter a prompt — same input, two different sampling strategies…"></textarea>
@@ -262,46 +263,72 @@ footer{display:none!important}
 
       <div class="divider"></div>
 
-      <!-- ══ Section 3: Standard LLM Benchmarks ══ -->
+      <!-- ══ Section 3: Model vs Model ══ -->
       <div class="space-y-3">
-        <div class="flex items-center justify-between">
-          <div><div class="text-sm font-bold text-purple-400">📋 Standard Benchmarks</div><div class="text-[10px] text-zinc-600 mt-0.5">Industry-standard evaluations via lm-eval-harness</div></div>
-          <button onclick="runStdEval()" id="eval-btn" class="btn btn-primary btn-sm">▶ Run Selected</button>
-        </div>
+        <div class="flex items-center justify-between"><div class="text-sm font-bold text-purple-400">🤖 Model vs Model</div><div class="text-[10px] text-zinc-600">Two models converse with each other</div></div>
         <div class="card space-y-3">
-          <div class="grid grid-cols-3 gap-x-4 gap-y-1 text-[11px]">
-            <div class="text-zinc-600 font-bold col-span-3 mb-1">Knowledge & Reasoning</div>
-            <label class="flex items-center gap-2 text-zinc-400 cursor-pointer"><input type="checkbox" class="eval-cb accent-purple-500" value="mmlu" checked>MMLU (57 subjects)</label>
-            <label class="flex items-center gap-2 text-zinc-400 cursor-pointer"><input type="checkbox" class="eval-cb accent-purple-500" value="hellaswag" checked>HellaSwag</label>
-            <label class="flex items-center gap-2 text-zinc-400 cursor-pointer"><input type="checkbox" class="eval-cb accent-purple-500" value="arc_challenge">ARC Challenge</label>
-            <label class="flex items-center gap-2 text-zinc-400 cursor-pointer"><input type="checkbox" class="eval-cb accent-purple-500" value="truthfulqa" checked>TruthfulQA</label>
-            <label class="flex items-center gap-2 text-zinc-400 cursor-pointer"><input type="checkbox" class="eval-cb accent-purple-500" value="winogrande">WinoGrande</label>
-            <label class="flex items-center gap-2 text-zinc-400 cursor-pointer"><input type="checkbox" class="eval-cb accent-purple-500" value="arc_easy">ARC Easy</label>
-
-            <div class="text-zinc-600 font-bold col-span-3 mt-2 mb-1">Math</div>
-            <label class="flex items-center gap-2 text-zinc-400 cursor-pointer"><input type="checkbox" class="eval-cb accent-purple-500" value="gsm8k" checked>GSM8K</label>
-
-            <div class="text-zinc-600 font-bold col-span-3 mt-2 mb-1">Code</div>
-            <label class="flex items-center gap-2 text-zinc-400 cursor-pointer"><input type="checkbox" class="eval-cb accent-purple-500" value="humaneval">HumanEval</label>
-
-            <div class="text-zinc-600 font-bold col-span-3 mt-2 mb-1">Language</div>
-            <label class="flex items-center gap-2 text-zinc-400 cursor-pointer"><input type="checkbox" class="eval-cb accent-purple-500" value="boolq">BoolQ</label>
+          <div class="grid grid-cols-2 gap-3">
+            <div><label class="text-[11px] text-zinc-500">Model A (loaded)</label><input id="mvm-model-a" class="input mt-1 text-xs" placeholder="Currently loaded model" disabled></div>
+            <div><label class="text-[11px] text-zinc-500">Model B</label><input id="mvm-model-b" class="input mt-1 text-xs" placeholder="HF model ID (e.g. Qwen/Qwen2.5-1.5B)"></div>
           </div>
-          <div class="flex items-center gap-3">
-            <label class="text-[11px] text-zinc-500">Samples per task:</label>
-            <input id="eval-limit" type="number" class="input w-20 text-xs" value="50" min="10" max="1000">
-            <span class="text-[10px] text-zinc-600">(50 = quick ~2min, null = full)</span>
+          <div class="grid grid-cols-3 gap-3">
+            <div class="col-span-2"><label class="text-[11px] text-zinc-500">Opening message</label><input id="mvm-topic" class="input mt-1 text-xs" value="Let's debate: is AI consciousness possible?"></div>
+            <div><label class="text-[11px] text-zinc-500">Turns</label><input id="mvm-turns" type="number" class="input mt-1 text-xs" value="4" min="1" max="10"></div>
           </div>
+          <button onclick="startModelVsModel()" id="mvm-btn" class="btn btn-primary btn-sm">▶ Start Conversation</button>
         </div>
-
-        <!-- Results table -->
-        <div id="eval-results" class="card hidden">
-          <div class="text-xs font-bold text-purple-400 mb-3">Results</div>
-          <div id="eval-table" class="space-y-1.5"></div>
-        </div>
-        <div id="eval-progress" class="hidden text-center text-xs text-purple-400 font-mono py-2">Running evaluations...</div>
+        <div id="mvm-messages" class="space-y-2 max-h-96 overflow-y-auto"></div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- ═══ EVAL SUITE (Standard LLM Benchmarks) ═══ -->
+  <div id="pg-eval" class="page hidden flex-1 overflow-y-auto p-6">
+    <div class="max-w-4xl mx-auto space-y-6">
+      <div class="flex items-center justify-between">
+        <div><h2 class="text-base font-bold text-purple-400">📋 Eval Suite</h2><p class="text-xs text-zinc-500 mt-1">Industry-standard LLM benchmarks via lm-eval-harness</p></div>
+        <button onclick="runStdEval()" id="eval-btn" class="btn btn-primary btn-sm">▶ Run Selected</button>
+      </div>
+
+      <div class="card space-y-3">
+        <div class="grid grid-cols-3 gap-x-4 gap-y-1 text-[11px]">
+          <div class="text-zinc-600 font-bold col-span-3 mb-1">🧠 Knowledge & Reasoning</div>
+          <label class="flex items-center gap-2 text-zinc-400 cursor-pointer"><input type="checkbox" class="eval-cb accent-purple-500" value="mmlu" checked>MMLU (57 subjects)</label>
+          <label class="flex items-center gap-2 text-zinc-400 cursor-pointer"><input type="checkbox" class="eval-cb accent-purple-500" value="hellaswag" checked>HellaSwag</label>
+          <label class="flex items-center gap-2 text-zinc-400 cursor-pointer"><input type="checkbox" class="eval-cb accent-purple-500" value="arc_challenge">ARC Challenge</label>
+          <label class="flex items-center gap-2 text-zinc-400 cursor-pointer"><input type="checkbox" class="eval-cb accent-purple-500" value="truthfulqa" checked>TruthfulQA</label>
+          <label class="flex items-center gap-2 text-zinc-400 cursor-pointer"><input type="checkbox" class="eval-cb accent-purple-500" value="winogrande">WinoGrande</label>
+          <label class="flex items-center gap-2 text-zinc-400 cursor-pointer"><input type="checkbox" class="eval-cb accent-purple-500" value="arc_easy">ARC Easy</label>
+
+          <div class="text-zinc-600 font-bold col-span-3 mt-2 mb-1">🔢 Math</div>
+          <label class="flex items-center gap-2 text-zinc-400 cursor-pointer"><input type="checkbox" class="eval-cb accent-purple-500" value="gsm8k" checked>GSM8K</label>
+
+          <div class="text-zinc-600 font-bold col-span-3 mt-2 mb-1">💻 Code</div>
+          <label class="flex items-center gap-2 text-zinc-400 cursor-pointer"><input type="checkbox" class="eval-cb accent-purple-500" value="humaneval">HumanEval</label>
+
+          <div class="text-zinc-600 font-bold col-span-3 mt-2 mb-1">📖 Language</div>
+          <label class="flex items-center gap-2 text-zinc-400 cursor-pointer"><input type="checkbox" class="eval-cb accent-purple-500" value="boolq">BoolQ</label>
+        </div>
+        <div class="flex items-center gap-3 pt-2">
+          <label class="text-[11px] text-zinc-500">Samples per task:</label>
+          <input id="eval-limit" type="number" class="input w-20 text-xs" value="50" min="10" max="1000">
+          <span class="text-[10px] text-zinc-600">(50 = quick ~2min, higher = more accurate)</span>
+        </div>
+      </div>
+
+      <!-- Results -->
+      <div id="eval-results" class="card hidden">
+        <div class="text-xs font-bold text-purple-400 mb-3">Results</div>
+        <div id="eval-table" class="space-y-1.5"></div>
+      </div>
+      <div id="eval-progress" class="hidden text-center text-xs text-purple-400 font-mono py-2">Running evaluations...</div>
+
+      <!-- Info -->
+      <div class="card text-[11px] text-zinc-600 space-y-1">
+        <p><b class="text-zinc-400">Requires:</b> <code class="text-purple-400">pip install lm-eval</code> and a loaded model.</p>
+        <p><b class="text-zinc-400">How it works:</b> Uses EleutherAI's lm-evaluation-harness to run standardized tests. Same framework used by HuggingFace Open LLM Leaderboard.</p>
+      </div>
     </div>
   </div>
 
@@ -664,7 +691,7 @@ $$('.sidebar-item[data-page]').forEach(b=>b.onclick=()=>{$$('.sidebar-item[data-
 function toggleTheme(){const d=document.documentElement,dark=d.classList.contains('dark');d.className=dark?'light':'dark';localStorage.setItem('fig-theme',dark?'light':'dark')}
 
 // ── HW ───────────────────────────────────────────────────────────────────────
-fetch('/api/health').then(r=>r.json()).then(d=>{const h=d.hardware;$('#hw-cpu').textContent=h.gpu?`⚡ ${h.gpu}`:`💻 CPU · ${h.cpu_cores} cores`;$('#hw-ram').textContent=`RAM ${h.ram_available_gb}/${h.ram_total_gb}GB`;$('#hw-torch').textContent=`PyTorch ${h.torch_version}`;$('#hw-badge').textContent=h.gpu?`⚡ ${h.gpu}`:`💻 ${h.cpu_cores} cores · ${h.ram_available_gb}GB free`;if(d.model_loaded){mSt('ready',d.model_loaded.split('/').pop());$('#m-in').value=d.model_loaded}}).catch(()=>{});
+fetch('/api/health').then(r=>r.json()).then(d=>{const h=d.hardware;$('#hw-cpu').textContent=h.gpu?`⚡ ${h.gpu}`:`💻 CPU · ${h.cpu_cores} cores`;$('#hw-ram').textContent=`RAM ${h.ram_available_gb}/${h.ram_total_gb}GB`;$('#hw-torch').textContent=`PyTorch ${h.torch_version}`;$('#hw-badge').textContent=h.gpu?`⚡ ${h.gpu}`:`💻 ${h.cpu_cores} cores · ${h.ram_available_gb}GB free`;if(d.model_loaded){mSt('ready',d.model_loaded.split('/').pop());$('#m-in').value=d.model_loaded;$('#mvm-model-a').value=d.model_loaded}}).catch(()=>{});
 
 // ── Model ────────────────────────────────────────────────────────────────────
 function mSt(t,s){const c={ready:'badge-green',empty:'badge-amber',error:'badge-red',loading:'badge-amber'};const i={ready:'●',empty:'○',error:'●',loading:'◎'};$('#m-status').className='badge '+c[t];$('#m-status').textContent=`${i[t]} ${s}`}
@@ -894,6 +921,32 @@ async function runStdEval(){
     $('#eval-progress').textContent='✗ '+e.message;btn.textContent='✗ Error';
   }
   setTimeout(()=>{btn.disabled=false;btn.textContent='▶ Run Selected';$('#eval-progress').classList.add('hidden')},5000);
+}
+
+// ── Arena: Model vs Model ───────────────────────────────────────────────────
+async function startModelVsModel(){
+  const btn=$('#mvm-btn');btn.disabled=true;btn.textContent='⏳ Loading…';
+  $('#mvm-messages').innerHTML='';
+  const modelB=$('#mvm-model-b').value.trim();
+  const topic=$('#mvm-topic').value.trim();
+  const turns=parseInt($('#mvm-turns').value)||4;
+  if(!modelB){btn.disabled=false;btn.textContent='▶ Start Conversation';$('#mvm-messages').innerHTML='<div class="text-amber-500 text-xs">Enter a Model B ID</div>';return}
+  try{
+    const r=await fetch('/api/arena/model-vs-model',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model_b:modelB,topic,turns})});
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.detail||'Failed');
+    let html='';
+    d.messages.forEach(m=>{
+      const isA=m.role==='Model A';
+      const color=isA?'text-fig-400':'text-amber-400';
+      const bg=isA?'border-fig-500/20':'border-amber-500/20';
+      html+=`<div class="card ${bg} py-2 px-3"><div class="flex items-center gap-2 mb-1"><span class="text-[10px] font-bold ${color}">${m.role}</span><span class="text-[9px] text-zinc-700">turn ${m.turn}</span></div><div class="text-xs text-zinc-300 leading-relaxed light:text-zinc-700">${esc(m.content)}</div></div>`;
+    });
+    $('#mvm-messages').innerHTML=html;
+    btn.textContent='✓ Done';
+  }catch(e){$('#mvm-messages').innerHTML=`<div class="text-red-400 text-xs">✗ ${e.message}</div>`;btn.textContent='✗ Error'}
+  setTimeout(()=>{btn.disabled=false;btn.textContent='▶ Start Conversation'},3000);
 }
 
 // ── CogMemBench ─────────────────────────────────────────────────────────────

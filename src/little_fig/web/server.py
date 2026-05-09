@@ -1086,6 +1086,97 @@ async def compare_prompt(body: dict):
     return results
 
 
+@app.post("/api/arena/model-vs-model")
+async def model_vs_model(body: dict):
+    """Two different models converse with each other.
+
+    Model A = currently loaded model.
+    Model B = loaded on-the-fly from HF (smaller model recommended).
+
+    Body:
+        model_b: str — HF model ID for the second model
+        topic: str — opening message
+        turns: int — number of exchanges (default 4)
+    """
+    if _model is None:
+        raise HTTPException(400, "Load Model A first (use the Chat page)")
+
+    model_b_id = body.get("model_b", "").strip()
+    if not model_b_id:
+        raise HTTPException(400, "model_b required")
+
+    topic = body.get("topic", "Hello! What do you think about the future of AI?")
+    turns = int(body.get("turns", 4))
+
+    _log(f"🤖 Model vs Model: {_model_id} vs {model_b_id} ({turns} turns)")
+
+    try:
+        import torch
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+
+        # Load Model B
+        _log(f"   Loading Model B: {model_b_id}...")
+        tok_b = AutoTokenizer.from_pretrained(model_b_id)
+        if tok_b.pad_token is None:
+            tok_b.pad_token = tok_b.eos_token
+        model_b = AutoModelForCausalLM.from_pretrained(
+            model_b_id, torch_dtype=torch.float32, low_cpu_mem_usage=True
+        )
+        model_b.eval()
+        device = next(_model.model.parameters()).device
+
+        tok_a = _model.tokenizer
+        model_a = _model.model
+        model_a.eval()
+
+        messages_log = []
+        conversation_a = []  # Model A sees this
+        conversation_b = []  # Model B sees this
+
+        # Seed: topic is the first user message to Model A
+        conversation_a.append({"role": "user", "content": topic})
+        messages_log.append({"role": "Human", "content": topic, "turn": 0})
+
+        for turn in range(turns):
+            # Model A responds
+            prompt_a = tok_a.apply_chat_template(conversation_a, tokenize=False, add_generation_prompt=True)
+            inputs_a = tok_a(prompt_a, return_tensors="pt", truncation=True, max_length=1024).to(device)
+            with torch.no_grad():
+                out_a = model_a.generate(**inputs_a, max_new_tokens=200, do_sample=True, temperature=0.7, top_p=0.9, pad_token_id=tok_a.pad_token_id)
+            resp_a = tok_a.decode(out_a[0][inputs_a["input_ids"].shape[1]:], skip_special_tokens=True).strip()
+
+            conversation_a.append({"role": "assistant", "content": resp_a})
+            conversation_b.append({"role": "user", "content": resp_a})
+            messages_log.append({"role": "Model A", "content": resp_a, "turn": turn + 1})
+            _log(f"   A[{turn+1}]: {resp_a[:50]}...")
+
+            # Model B responds (unless last turn)
+            if turn < turns - 1:
+                prompt_b = tok_b.apply_chat_template(conversation_b, tokenize=False, add_generation_prompt=True)
+                inputs_b = tok_b(prompt_b, return_tensors="pt", truncation=True, max_length=1024)
+                with torch.no_grad():
+                    out_b = model_b.generate(**inputs_b, max_new_tokens=200, do_sample=True, temperature=0.7, top_p=0.9, pad_token_id=tok_b.pad_token_id)
+                resp_b = tok_b.decode(out_b[0][inputs_b["input_ids"].shape[1]:], skip_special_tokens=True).strip()
+
+                conversation_b.append({"role": "assistant", "content": resp_b})
+                conversation_a.append({"role": "user", "content": resp_b})
+                messages_log.append({"role": "Model B", "content": resp_b, "turn": turn + 1})
+                _log(f"   B[{turn+1}]: {resp_b[:50]}...")
+
+        # Cleanup Model B
+        del model_b
+        import gc; gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        _log(f"✓ Model vs Model complete: {len(messages_log)} messages")
+        return {"messages": messages_log, "model_a": _model_id, "model_b": model_b_id, "turns": turns}
+
+    except Exception as e:
+        _log(f"✗ Model vs Model error: {e}")
+        raise HTTPException(500, str(e))
+
+
 # ── Upload ────────────────────────────────────────────────────────────────────
 
 @app.post("/api/upload")
