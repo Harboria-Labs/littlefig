@@ -76,6 +76,7 @@ footer{display:none!important}
     <div class="label px-3 pt-4">Tools</div>
     <div class="sidebar-item" data-page="arena"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"/></svg>FigSpace</div>
     <div class="sidebar-item" data-page="bench"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>Benchmarks</div>
+    <div class="sidebar-item" data-page="cogmem"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>CogMemBench</div>
     <div class="sidebar-item" data-page="ckpt"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>Checkpoints</div>
 
     <div class="label px-3 pt-4">System</div>
@@ -240,10 +241,75 @@ footer{display:none!important}
     <div class="max-w-4xl mx-auto space-y-6">
       <div class="flex items-center justify-between"><div><h2 class="text-base font-bold text-cyan-400">📊 Benchmarks</h2><p class="text-xs text-zinc-500 mt-1">FigQuant · FigKernel · Memory projections</p></div><button onclick="runBench()" id="bench-btn" class="btn btn-primary btn-sm">▶ Run Live</button></div>
       <div class="grid grid-cols-2 gap-4">
-        <div class="card"><div class="text-xs font-bold text-cyan-400 mb-3">FigQuant Quality</div><div class="space-y-2 text-[12px] font-mono" id="bench-quant"><div class="flex justify-between text-zinc-500"><span>Cosine Similarity</span><span class="text-cyan-400">0.9955</span></div><div class="flex justify-between text-zinc-500"><span>MSE</span><span class="text-cyan-400">0.0090</span></div><div class="flex justify-between text-zinc-500"><span>SNR</span><span class="text-cyan-400">20.5 dB</span></div><div class="flex justify-between text-zinc-500"><span>Bits/param</span><span class="text-cyan-400">4.31</span></div><div class="w-full bg-zinc-800 rounded-full h-1.5 mt-2 light:bg-zinc-200"><div class="bg-cyan-500 h-1.5 rounded-full" style="width:99.55%"></div></div></div></div>
-        <div class="card"><div class="text-xs font-bold text-cyan-400 mb-3">FigKernel Speedup</div><div class="space-y-2 text-[12px] font-mono" id="bench-kernel"><div class="flex justify-between text-zinc-500"><span>RMSNorm</span><span class="text-cyan-400">2.95× faster</span></div><div class="flex justify-between text-zinc-500"><span>FigLinear (fast)</span><span class="text-cyan-400">~1.0× baseline</span></div><div class="flex justify-between text-zinc-500"><span>FigLinear (lowram)</span><span class="text-zinc-600">~0.5× baseline</span></div><div class="flex justify-between text-zinc-500"><span>Fused LoRA</span><span class="text-cyan-400">0 diff vs manual</span></div></div></div>
-        <div class="card"><div class="text-xs font-bold text-cyan-400 mb-3">Memory Usage (1.1B model)</div><div class="space-y-2 text-[12px] font-mono"><div class="flex justify-between text-zinc-500"><span>Standard FP32</span><span class="text-red-400">26.6 GB</span></div><div class="flex justify-between text-zinc-500"><span>Tier 1: LoRA</span><span class="text-cyan-400">~400 MB</span></div><div class="flex justify-between text-zinc-500"><span>Tier 2: LISA</span><span class="text-cyan-400">~900 MB</span></div><div class="flex justify-between text-zinc-500"><span>Tier 3: MeZO</span><span class="text-cyan-400">~600 MB</span></div><div class="flex justify-between text-zinc-500"><span>Tier 4: LOMO</span><span class="text-cyan-400">~800 MB</span></div></div></div>
-        <div class="card"><div class="text-xs font-bold text-cyan-400 mb-3">vs Other Tools (1.1B min RAM)</div><div class="space-y-2 text-[12px] font-mono"><div class="flex justify-between text-zinc-500"><span>Unsloth</span><span class="text-zinc-600">GPU only</span></div><div class="flex justify-between text-zinc-500"><span>LLaMA-Factory</span><span class="text-zinc-600">~8 GB</span></div><div class="flex justify-between text-zinc-500"><span>TRL</span><span class="text-zinc-600">~8 GB</span></div><div class="flex justify-between text-zinc-500"><span>Little Fig</span><span class="text-fig-400 font-bold">~400 MB ✓</span></div></div></div>
+        <div class="card"><div class="text-xs font-bold text-cyan-400 mb-3">FigQuant Quality <span class="text-[9px] text-zinc-600 font-normal ml-1">live</span></div><div class="space-y-2 text-[12px] font-mono" id="bench-quant"><div class="text-zinc-600 text-[11px]">Click "▶ Run Live" to benchmark on your hardware</div></div></div>
+        <div class="card"><div class="text-xs font-bold text-cyan-400 mb-3">FigKernel Speedup <span class="text-[9px] text-zinc-600 font-normal ml-1">live</span></div><div class="space-y-2 text-[12px] font-mono" id="bench-kernel"><div class="text-zinc-600 text-[11px]">Click "▶ Run Live" to benchmark on your hardware</div></div></div>
+        <div class="card"><div class="text-xs font-bold text-cyan-400 mb-3">Memory Usage (1.1B model) <span class="text-[9px] text-zinc-600 font-normal ml-1">reference</span></div><div class="space-y-2 text-[12px] font-mono"><div class="flex justify-between text-zinc-500"><span>Standard FP32</span><span class="text-red-400">26.6 GB</span></div><div class="flex justify-between text-zinc-500"><span>Tier 1: LoRA</span><span class="text-cyan-400">~400 MB</span></div><div class="flex justify-between text-zinc-500"><span>Tier 2: LISA</span><span class="text-cyan-400">~900 MB</span></div><div class="flex justify-between text-zinc-500"><span>Tier 3: MeZO</span><span class="text-cyan-400">~600 MB</span></div><div class="flex justify-between text-zinc-500"><span>Tier 4: LOMO</span><span class="text-cyan-400">~800 MB</span></div></div></div>
+        <div class="card"><div class="text-xs font-bold text-cyan-400 mb-3">vs Other Tools (1.1B min RAM) <span class="text-[9px] text-zinc-600 font-normal ml-1">reference</span></div><div class="space-y-2 text-[12px] font-mono"><div class="flex justify-between text-zinc-500"><span>Unsloth</span><span class="text-zinc-600">GPU only</span></div><div class="flex justify-between text-zinc-500"><span>LLaMA-Factory</span><span class="text-zinc-600">~8 GB</span></div><div class="flex justify-between text-zinc-500"><span>TRL</span><span class="text-zinc-600">~8 GB</span></div><div class="flex justify-between text-zinc-500"><span>Little Fig</span><span class="text-fig-400 font-bold">~400 MB ✓</span></div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ COGMEMBENCH ═══ -->
+  <div id="pg-cogmem" class="page hidden flex-1 overflow-y-auto p-6">
+    <div class="max-w-4xl mx-auto space-y-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-base font-bold text-purple-400">🧠 CogMemBench</h2>
+          <p class="text-xs text-zinc-500 mt-1">Continuous Cognitive Memory Benchmark — 5 axes of memory evaluation</p>
+        </div>
+        <button onclick="runCogMem()" id="cogmem-btn" class="btn btn-primary btn-sm">▶ Run Benchmark</button>
+      </div>
+
+      <!-- Score display -->
+      <div class="card text-center py-6">
+        <div class="text-[10px] text-zinc-600 uppercase tracking-wider mb-1">CogMem Score</div>
+        <div id="cogmem-score" class="text-4xl font-extrabold text-purple-400">—</div>
+        <div class="text-[11px] text-zinc-600 mt-1">/ 100</div>
+      </div>
+
+      <!-- 5-axis breakdown -->
+      <div class="grid grid-cols-1 gap-3" id="cogmem-axes">
+        <div class="card flex items-center gap-4">
+          <div class="w-28 text-xs font-bold text-purple-400">📝 Acquisition</div>
+          <div class="flex-1"><div class="w-full bg-zinc-800 rounded-full h-2 light:bg-zinc-200"><div class="bg-purple-500 h-2 rounded-full transition-all" id="ax-acquisition" style="width:0%"></div></div></div>
+          <div class="w-12 text-right text-xs font-mono text-zinc-500" id="ax-acquisition-pct">—</div>
+        </div>
+        <div class="card flex items-center gap-4">
+          <div class="w-28 text-xs font-bold text-purple-400">🎯 Recall</div>
+          <div class="flex-1"><div class="w-full bg-zinc-800 rounded-full h-2 light:bg-zinc-200"><div class="bg-purple-500 h-2 rounded-full transition-all" id="ax-recall" style="width:0%"></div></div></div>
+          <div class="w-12 text-right text-xs font-mono text-zinc-500" id="ax-recall-pct">—</div>
+        </div>
+        <div class="card flex items-center gap-4">
+          <div class="w-28 text-xs font-bold text-purple-400">💨 Decay</div>
+          <div class="flex-1"><div class="w-full bg-zinc-800 rounded-full h-2 light:bg-zinc-200"><div class="bg-purple-500 h-2 rounded-full transition-all" id="ax-decay" style="width:0%"></div></div></div>
+          <div class="w-12 text-right text-xs font-mono text-zinc-500" id="ax-decay-pct">—</div>
+        </div>
+        <div class="card flex items-center gap-4">
+          <div class="w-28 text-xs font-bold text-purple-400">⚡ Conflict</div>
+          <div class="flex-1"><div class="w-full bg-zinc-800 rounded-full h-2 light:bg-zinc-200"><div class="bg-purple-500 h-2 rounded-full transition-all" id="ax-conflict" style="width:0%"></div></div></div>
+          <div class="w-12 text-right text-xs font-mono text-zinc-500" id="ax-conflict-pct">—</div>
+        </div>
+        <div class="card flex items-center gap-4">
+          <div class="w-28 text-xs font-bold text-purple-400">🧠 Consolidation</div>
+          <div class="flex-1"><div class="w-full bg-zinc-800 rounded-full h-2 light:bg-zinc-200"><div class="bg-purple-500 h-2 rounded-full transition-all" id="ax-consolidation" style="width:0%"></div></div></div>
+          <div class="w-12 text-right text-xs font-mono text-zinc-500" id="ax-consolidation-pct">—</div>
+        </div>
+      </div>
+
+      <!-- Config -->
+      <div class="card space-y-3">
+        <div class="text-xs font-bold text-purple-400">Configuration</div>
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="text-[11px] text-zinc-500">Cases per axis</label><input id="cogmem-per-axis" type="number" class="input mt-1 text-xs" value="20" min="5" max="200"></div>
+          <div><label class="text-[11px] text-zinc-500">Max total cases</label><input id="cogmem-max" type="number" class="input mt-1 text-xs" value="100" min="10" max="1000"></div>
+        </div>
+        <p class="text-[11px] text-zinc-600">Requires a loaded model. Tests acquisition, goal-directed recall, graceful decay, conflict detection, and consolidation.</p>
+      </div>
+
+      <!-- Results detail -->
+      <div class="card">
+        <div class="text-xs font-bold text-purple-400 mb-2">Run Log</div>
+        <div id="cogmem-log" class="text-[11px] font-mono text-zinc-600 max-h-40 overflow-y-auto">Load a model and click "Run Benchmark" to evaluate cognitive memory capabilities.</div>
       </div>
     </div>
   </div>
@@ -608,6 +674,43 @@ async function runBench(){$('#bench-btn').disabled=true;$('#bench-btn').textCont
     $('#bench-btn').textContent='✓ Done'}
   catch(e){$('#bench-btn').textContent='✗ Error'}
   setTimeout(()=>{$('#bench-btn').disabled=false;$('#bench-btn').textContent='▶ Run Live'},3000)}
+
+// ── CogMemBench ─────────────────────────────────────────────────────────────
+async function runCogMem(){
+  const btn=$('#cogmem-btn');btn.disabled=true;btn.textContent='⏳ Running…';
+  $('#cogmem-log').textContent='Running CogMemBench... this may take a minute.';
+  const perAxis=$('#cogmem-per-axis').value;
+  const maxCases=$('#cogmem-max').value;
+  try{
+    const r=await fetch('/api/bench/cogmem',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({per_axis:parseInt(perAxis),max_cases:parseInt(maxCases)})});
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.detail||'Failed');
+    // Update score
+    $('#cogmem-score').textContent=d.cogmem_score.toFixed(1);
+    // Update axis bars
+    for(const[ax,acc]of Object.entries(d.axis_accuracy)){
+      const bar=$(`#ax-${ax}`);
+      const pct=$(`#ax-${ax}-pct`);
+      if(bar){bar.style.width=`${(acc*100).toFixed(0)}%`}
+      if(pct){pct.textContent=`${(acc*100).toFixed(1)}%`}
+    }
+    // Log
+    let log=`✓ CogMem Score: ${d.cogmem_score}/100\n`;
+    log+=`  Total: ${d.total_correct}/${d.total_cases} correct\n`;
+    log+=`  Runtime: ${d.runtime_seconds}s (${d.cases_per_second} cases/sec)\n\n`;
+    log+=`  Per-axis:\n`;
+    for(const[ax,acc]of Object.entries(d.axis_accuracy)){
+      log+=`    ${ax}: ${(acc*100).toFixed(1)}%\n`;
+    }
+    $('#cogmem-log').textContent=log;
+    btn.textContent='✓ Complete';
+  }catch(e){
+    $('#cogmem-log').textContent='✗ Error: '+e.message+'\n\nMake sure a model is loaded first.';
+    btn.textContent='✗ Error';
+  }
+  setTimeout(()=>{btn.disabled=false;btn.textContent='▶ Run Benchmark'},3000);
+}
 
 
 // ── Mobile sidebar toggle ────────────────────────────────────────────────────

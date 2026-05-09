@@ -508,10 +508,49 @@ async def run_benchmarks():
     return results
 
 
-# ── Logs ──────────────────────────────────────────────────────────────────────
+# ── CogMemBench ──────────────────────────────────────────────────────────────
 
-@app.get("/api/logs")
-async def get_logs(n: int = Query(default=100, le=500)):
+_cogmem_running = False
+_cogmem_results = None
+
+@app.post("/api/bench/cogmem")
+async def run_cogmembench(body: dict = {}):
+    """Run CogMemBench against the currently loaded model."""
+    global _cogmem_running, _cogmem_results
+    if _cogmem_running:
+        raise HTTPException(409, "CogMemBench already running")
+    if _model is None:
+        raise HTTPException(400, "Load a model first")
+
+    per_axis = int(body.get("per_axis", 20))
+    max_cases = int(body.get("max_cases", 100))
+
+    _cogmem_running = True
+    _log(f"🧠 Running CogMemBench ({per_axis}/axis, max {max_cases})...")
+
+    try:
+        sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "cogmembench"))
+        from cogmembench import CogMemRunner
+
+        runner = CogMemRunner(per_axis=per_axis)
+
+        def model_fn(prompt):
+            return _model.generate(prompt, max_new_tokens=200)
+
+        results = runner.run(model_fn=model_fn, max_cases=max_cases, verbose=False)
+        _cogmem_results = results
+        _log(f"✓ CogMemBench complete: Score={results['cogmem_score']}/100")
+        return results
+    except Exception as e:
+        _log(f"✗ CogMemBench error: {e}")
+        raise HTTPException(500, str(e))
+    finally:
+        _cogmem_running = False
+
+
+@app.get("/api/bench/cogmem/status")
+async def cogmem_status():
+    return {"running": _cogmem_running, "results": _cogmem_results}
     return {"logs": list(_log_buffer)[-n:]}
 
 
