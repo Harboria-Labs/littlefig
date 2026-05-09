@@ -6,7 +6,7 @@ Train models with [Ember's Diaries](https://github.com/ticketguy/embers-diaries)
 
 [![Tests](https://img.shields.io/badge/tests-21%2F21%20passing-brightgreen)]()
 [![Python](https://img.shields.io/badge/python-3.9+-blue)]()
-[![License](https://img.shields.io/badge/license-MIT-green)]()
+[![License](https://img.shields.io/badge/license-AGPL--3.0-blue)]()
 
 ---
 
@@ -191,4 +191,4 @@ See [`RESEARCH_PLAN.md`](RESEARCH_PLAN.md) for ongoing research directions.
 
 ## License
 
-MIT
+AGPL-3.0-or-later. Commercial license available from Harboria Labs.

@@ -402,5 +402,5 @@ The system treats the model not as a static artifact but as a living cognitive e
 ---
 
 *Code: https://github.com/ticketguy/littlefig*  
-*License: MIT*  
-*Built for Lila — Harboria Labs.*
+*License: AGPL-3.0*  
+*Built by 0xticketguy / Harboria Labs.*
