@@ -887,9 +887,9 @@ async function arenaCompare(){
 
 // ── Arena: Standard Benchmarks ──────────────────────────────────────────────
 async function runStdEval(){
-  const btn=$('#eval-btn');btn.disabled=true;btn.textContent='⏳ Running…';
+  const btn=$('#eval-btn');btn.disabled=true;btn.textContent='⏳ Starting…';
   $('#eval-progress').classList.remove('hidden');
-  $('#eval-progress').textContent='Running evaluations… this may take several minutes per benchmark.';
+  $('#eval-progress').textContent='Starting evaluations…';
   const cbs=document.querySelectorAll('.eval-cb:checked');
   const benchmarks=Array.from(cbs).map(cb=>cb.value);
   const limit=parseInt($('#eval-limit').value)||50;
@@ -899,28 +899,46 @@ async function runStdEval(){
       body:JSON.stringify({benchmarks,limit})});
     const d=await r.json();
     if(!r.ok)throw new Error(d.detail||'Failed');
-    // Render results
-    $('#eval-results').classList.remove('hidden');
-    let html='';
-    for(const[name,res]of Object.entries(d.results)){
-      const score=res.score!==null?res.score+'%':'—';
-      const color=res.score>=70?'text-fig-400':res.score>=40?'text-amber-400':'text-red-400';
-      const barW=res.score||0;
-      const err=res.error?`<span class="text-red-400 text-[10px] ml-2">${res.error}</span>`:'';
-      html+=`<div class="flex items-center gap-3">
-        <div class="w-28 text-[11px] font-mono text-zinc-400">${name}</div>
-        <div class="flex-1"><div class="w-full bg-zinc-800 rounded-full h-1.5 light:bg-zinc-200"><div class="bg-purple-500 h-1.5 rounded-full" style="width:${barW}%"></div></div></div>
-        <div class="w-14 text-right text-xs font-bold ${color}">${score}</div>
-        <div class="w-16 text-[10px] text-zinc-600">${res.metric||''}</div>${err}
-      </div>`;
-    }
-    $('#eval-table').innerHTML=html;
-    $('#eval-progress').textContent=`✓ ${benchmarks.length} benchmarks complete (${limit} samples each)`;
-    btn.textContent='✓ Complete';
+    // Poll for results
+    btn.textContent='⏳ Running…';
+    $('#eval-progress').textContent=`Running ${benchmarks.length} benchmarks in background… results appear as they complete.`;
+    const poll=setInterval(async()=>{
+      try{
+        const s=await(await fetch('/api/eval/status')).json();
+        // Render partial results
+        const res=s.results||{};
+        if(res._error){clearInterval(poll);$('#eval-progress').textContent='✗ '+res._error;btn.disabled=false;btn.textContent='▶ Run Selected';return}
+        const keys=Object.keys(res);
+        if(keys.length>0){
+          $('#eval-results').classList.remove('hidden');
+          let html='';
+          for(const[name,r]of Object.entries(res)){
+            const score=r.score!==null?r.score+'%':'—';
+            const color=r.score>=70?'text-fig-400':r.score>=40?'text-amber-400':'text-red-400';
+            const barW=r.score||0;
+            const err=r.error?`<span class="text-red-400 text-[10px] ml-2">${r.error}</span>`:'';
+            html+=`<div class="flex items-center gap-3">
+              <div class="w-28 text-[11px] font-mono text-zinc-400">${name}</div>
+              <div class="flex-1"><div class="w-full bg-zinc-800 rounded-full h-1.5 light:bg-zinc-200"><div class="bg-purple-500 h-1.5 rounded-full" style="width:${barW}%"></div></div></div>
+              <div class="w-14 text-right text-xs font-bold ${color}">${score}</div>
+              <div class="w-16 text-[10px] text-zinc-600">${r.metric||''}</div>${err}
+            </div>`;
+          }
+          $('#eval-table').innerHTML=html;
+          $('#eval-progress').textContent=`Running… ${keys.length}/${benchmarks.length} complete`;
+        }
+        if(!s.running){
+          clearInterval(poll);
+          $('#eval-progress').textContent=`✓ All ${benchmarks.length} benchmarks complete (${limit} samples each)`;
+          btn.textContent='✓ Complete';
+          setTimeout(()=>{btn.disabled=false;btn.textContent='▶ Run Selected'},3000);
+        }
+      }catch(e){}
+    },3000);
   }catch(e){
     $('#eval-progress').textContent='✗ '+e.message;btn.textContent='✗ Error';
+    btn.disabled=false;btn.textContent='▶ Run Selected';
   }
-  setTimeout(()=>{btn.disabled=false;btn.textContent='▶ Run Selected';$('#eval-progress').classList.add('hidden')},5000);
 }
 
 // ── Arena: Model vs Model ───────────────────────────────────────────────────

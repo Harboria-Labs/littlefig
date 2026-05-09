@@ -831,6 +831,7 @@ BENCHMARK_REGISTRY = {
 
 _eval_running = False
 _eval_results = {}
+_eval_thread = None
 
 
 @app.get("/api/eval/benchmarks")
@@ -841,13 +842,15 @@ async def list_benchmarks():
 
 @app.post("/api/eval/run")
 async def run_eval(body: dict):
-    """Run standard benchmarks on the loaded model.
+    """Run standard benchmarks on the loaded model in a background thread.
+
+    Returns immediately. Poll /api/eval/status for progress.
 
     Body:
         benchmarks: list of benchmark names (e.g. ["mmlu", "hellaswag", "gsm8k"])
         limit: int — number of samples per task (default 50, use null for full)
     """
-    global _eval_running, _eval_results
+    global _eval_running, _eval_results, _eval_thread
     if _eval_running:
         raise HTTPException(409, "Evaluation already in progress")
     if _model is None:
@@ -862,91 +865,87 @@ async def run_eval(body: dict):
         raise HTTPException(400, f"Unknown benchmarks: {invalid}. Available: {list(BENCHMARK_REGISTRY.keys())}")
 
     _eval_running = True
-    _log(f"📋 Running standard evals: {benchmarks} (limit={limit})...")
+    _eval_results = {}
+    _log(f"📋 Running standard evals in background: {benchmarks} (limit={limit})...")
 
-    try:
-        import lm_eval
-        from lm_eval.models.huggingface import HFLM
+    def _run_eval():
+        global _eval_running, _eval_results
+        try:
+            import lm_eval
+            from lm_eval.models.huggingface import HFLM
 
-        # Wrap the loaded model
-        lm = HFLM(
-            pretrained=_model.model,
-            tokenizer=_model.tokenizer,
-            batch_size=4,
-        )
+            # Wrap the loaded model
+            lm = HFLM(
+                pretrained=_model.model,
+                tokenizer=_model.tokenizer,
+                batch_size=4,
+            )
 
-        # Collect all tasks
-        all_tasks = []
-        fewshot_map = {}
-        for b in benchmarks:
-            cfg = BENCHMARK_REGISTRY[b]
-            all_tasks.extend(cfg["tasks"])
-            for t in cfg["tasks"]:
-                fewshot_map[t] = cfg["num_fewshot"]
+            results_out = {}
+            for b in benchmarks:
+                cfg = BENCHMARK_REGISTRY[b]
+                _log(f"   Running {b}...")
+                try:
+                    kwargs = {}
+                    if b == "humaneval":
+                        kwargs["confirm_run_unsafe_code"] = True
 
-        # Use highest fewshot as default (simple_evaluate uses one value)
-        # For mixed, we run each separately
-        results_out = {}
-        for b in benchmarks:
-            cfg = BENCHMARK_REGISTRY[b]
-            _log(f"   Running {b}...")
-            try:
-                kwargs = {}
-                if b == "humaneval":
-                    kwargs["confirm_run_unsafe_code"] = True
+                    raw = lm_eval.simple_evaluate(
+                        model=lm,
+                        tasks=cfg["tasks"],
+                        num_fewshot=cfg["num_fewshot"],
+                        limit=limit,
+                        log_samples=False,
+                        **kwargs,
+                    )
 
-                raw = lm_eval.simple_evaluate(
-                    model=lm,
-                    tasks=cfg["tasks"],
-                    num_fewshot=cfg["num_fewshot"],
-                    limit=limit,
-                    log_samples=False,
-                    **kwargs,
-                )
-
-                # Extract the score
-                task_results = raw.get("results", {})
-                # Get primary task result
-                primary_task = cfg["tasks"][0]
-                if primary_task in task_results:
-                    score = task_results[primary_task].get(cfg["metric"])
-                    if score is None:
-                        # Try without suffix
-                        for k, v in task_results[primary_task].items():
-                            if k.startswith("acc") or k.startswith("exact_match") or k.startswith("pass@"):
-                                score = v
+                    # Extract the score
+                    task_results = raw.get("results", {})
+                    score = None
+                    primary_task = cfg["tasks"][0]
+                    if primary_task in task_results:
+                        score = task_results[primary_task].get(cfg["metric"])
+                        if score is None:
+                            for k, v in task_results[primary_task].items():
+                                if k.startswith("acc") or k.startswith("exact_match") or k.startswith("pass@"):
+                                    score = v
+                                    break
+                    else:
+                        for k, v in task_results.items():
+                            if cfg["metric"] in v:
+                                score = v[cfg["metric"]]
                                 break
-                else:
-                    # Group task (e.g. mmlu) — look for aggregate
-                    for k, v in task_results.items():
-                        if cfg["metric"] in v:
-                            score = v[cfg["metric"]]
-                            break
 
-                results_out[b] = {
-                    "score": round(score * 100, 1) if score is not None else None,
-                    "metric": cfg["metric"].split(",")[0],
-                    "num_samples": limit,
-                    "category": cfg["category"],
-                    "raw": {k: {mk: mv for mk, mv in v.items() if not mk.startswith("_")}
-                            for k, v in task_results.items()},
-                }
-                _log(f"   ✓ {b}: {results_out[b]['score']}%")
-            except Exception as e:
-                results_out[b] = {"score": None, "error": str(e), "category": cfg["category"]}
-                _log(f"   ✗ {b}: {e}")
+                    results_out[b] = {
+                        "score": round(score * 100, 1) if score is not None else None,
+                        "metric": cfg["metric"].split(",")[0],
+                        "num_samples": limit,
+                        "category": cfg["category"],
+                        "raw": {k: {mk: mv for mk, mv in v.items() if not mk.startswith("_")}
+                                for k, v in task_results.items()},
+                    }
+                    _log(f"   ✓ {b}: {results_out[b]['score']}%")
+                except Exception as e:
+                    results_out[b] = {"score": None, "error": str(e), "category": cfg["category"]}
+                    _log(f"   ✗ {b}: {e}")
 
-        _eval_results = results_out
-        _log(f"✓ Standard eval complete: {len(results_out)} benchmarks")
-        return {"results": results_out, "model": _model_id}
+                # Update results incrementally so status endpoint shows progress
+                _eval_results = dict(results_out)
 
-    except ImportError:
-        raise HTTPException(500, "lm-eval not installed. Run: pip install lm-eval")
-    except Exception as e:
-        _log(f"✗ Eval error: {e}")
-        raise HTTPException(500, str(e))
-    finally:
-        _eval_running = False
+            _log(f"✓ Standard eval complete: {len(results_out)} benchmarks")
+
+        except ImportError:
+            _log("✗ lm-eval not installed. Run: pip install lm-eval")
+            _eval_results = {"_error": "lm-eval not installed"}
+        except Exception as e:
+            _log(f"✗ Eval error: {e}")
+            _eval_results = {"_error": str(e)}
+        finally:
+            _eval_running = False
+
+    _eval_thread = threading.Thread(target=_run_eval, daemon=True)
+    _eval_thread.start()
+    return {"status": "started", "benchmarks": benchmarks, "limit": limit}
 
 
 @app.get("/api/eval/status")
