@@ -33,12 +33,30 @@ select.input{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xml
 .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:600;font-family:'JetBrains Mono',monospace}
 .badge-green{background:rgba(16,185,129,.12);color:#10b981}.badge-amber{background:rgba(245,158,11,.12);color:#f59e0b}.badge-red{background:rgba(239,68,68,.12);color:#ef4444}
 footer{display:none!important}
+
+/* Mobile responsive */
+@media(max-width:767px){
+  .sidebar-item{padding:12px 16px;font-size:14px}
+  .btn{padding:10px 18px;font-size:13px}
+  .btn-sm{padding:7px 12px;font-size:12px}
+  .input{padding:11px 14px;font-size:14px}
+  #pg-chat .h-11{padding-left:48px}
+  .card{padding:14px}
+}
+
 </style>
 </head>
 <body class="bg-[#0a0a0c] text-zinc-200 h-screen flex overflow-hidden light:bg-gray-50 light:text-zinc-800">
+<!-- Mobile hamburger -->
+<button id="menu-btn" onclick="toggleSidebar()" class="md:hidden fixed top-3 left-3 z-[60] p-2 rounded-lg bg-zinc-800/90 border border-white/10 text-zinc-300 backdrop-blur-sm">
+  <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+</button>
+<!-- Mobile overlay -->
+<div id="sidebar-overlay" onclick="toggleSidebar()" class="hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm md:hidden"></div>
+
 
 <!-- ═══ SIDEBAR ═══ -->
-<aside class="w-56 h-full flex flex-col border-r border-white/5 bg-[#07070a] shrink-0 light:bg-white light:border-zinc-200">
+<aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-64 h-full flex flex-col border-r border-white/5 bg-[#07070a] shrink-0 light:bg-white light:border-zinc-200 transform -translate-x-full md:translate-x-0 md:static md:w-56 transition-transform duration-200 ease-in-out">
   <!-- Logo -->
   <div class="px-5 pt-5 pb-3 flex items-center gap-3">
     <span class="text-2xl">🍐</span>
@@ -77,7 +95,7 @@ footer{display:none!important}
 </aside>
 
 <!-- ═══ MAIN ═══ -->
-<main class="flex-1 flex flex-col min-w-0 h-full">
+<main class="flex-1 flex flex-col min-w-0 h-full w-full">
 
   <!-- ═══ CHAT ═══ -->
   <div id="pg-chat" class="page flex-1 flex flex-col h-full">
@@ -93,7 +111,7 @@ footer{display:none!important}
     </div>
     <div class="flex flex-1 min-h-0">
       <!-- Left: chat list + model loader -->
-      <div class="w-52 border-r border-white/5 flex flex-col shrink-0 light:border-zinc-200">
+      <div class="hidden md:flex w-52 border-r border-white/5 flex-col shrink-0 light:border-zinc-200">
         <div class="px-3 pt-3 pb-1"><span class="label">History</span></div>
         <div id="chat-list" class="flex-1 overflow-y-auto px-2 space-y-0.5 text-[12px]"></div>
         <div class="p-3 border-t border-white/5 space-y-2 light:border-zinc-200">
@@ -590,6 +608,20 @@ async function runBench(){$('#bench-btn').disabled=true;$('#bench-btn').textCont
     $('#bench-btn').textContent='✓ Done'}
   catch(e){$('#bench-btn').textContent='✗ Error'}
   setTimeout(()=>{$('#bench-btn').disabled=false;$('#bench-btn').textContent='▶ Run Live'},3000)}
+
+
+// ── Mobile sidebar toggle ────────────────────────────────────────────────────
+function toggleSidebar(){
+  const sb=document.getElementById('sidebar');
+  const ov=document.getElementById('sidebar-overlay');
+  const open=sb.classList.contains('-translate-x-full');
+  if(open){sb.classList.remove('-translate-x-full');sb.classList.add('translate-x-0');ov.classList.remove('hidden')}
+  else{sb.classList.add('-translate-x-full');sb.classList.remove('translate-x-0');ov.classList.add('hidden')}
+}
+// Close sidebar when nav item clicked on mobile
+document.querySelectorAll('.sidebar-item').forEach(el=>{el.addEventListener('click',()=>{
+  if(window.innerWidth<768){toggleSidebar()}
+})});
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 fetch('/api/model/status').then(r=>r.json()).then(d=>{if(d.loaded)connectWS()}).catch(()=>{});
