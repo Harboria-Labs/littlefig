@@ -12,6 +12,8 @@ We present **Fig Engine**, a system for fine-tuning large language models entire
 
 Fig Engine fine-tunes GPT-2 (124M) using 45.8 MB for base weights and projects TinyLlama (1.1B) at ~400 MB — an order of magnitude below the 26.6 GB required by standard FP32+AdamW.
 
+Beyond the architecture, we present three original research contributions: (1) **FigMeZO**, an inverse error-shaped zeroth-order optimizer that reduces loss by 18.6% over standard MeZO by probing clean weight dimensions rather than noisy ones — a counter-intuitive finding validated across 3 seeds; (2) **Sensitivity-guided LISA**, which concentrates training budget on high-impact layers using a one-time probe pass, reducing loss by 10%; and (3) a validated GPU benchmark showing FigQuant trains **7× faster** than industry-standard BnB NF4 QLoRA on TinyLlama 1.1B while winning quantization quality on all 156 layers.
+
 ---
 
 ## 1. Introduction
