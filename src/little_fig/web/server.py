@@ -811,6 +811,281 @@ async def cogmem_status():
     return {"logs": list(_log_buffer)[-n:]}
 
 
+# ── Standard LLM Benchmarks (via lm-eval-harness) ────────────────────────────
+
+BENCHMARK_REGISTRY = {
+    # Knowledge & Reasoning
+    "mmlu":         {"tasks": ["mmlu"], "num_fewshot": 5, "metric": "acc,none", "category": "knowledge"},
+    "hellaswag":    {"tasks": ["hellaswag"], "num_fewshot": 10, "metric": "acc_norm,none", "category": "knowledge"},
+    "arc_easy":     {"tasks": ["arc_easy"], "num_fewshot": 25, "metric": "acc_norm,none", "category": "knowledge"},
+    "arc_challenge":{"tasks": ["arc_challenge"], "num_fewshot": 25, "metric": "acc_norm,none", "category": "knowledge"},
+    "truthfulqa":   {"tasks": ["truthfulqa_mc2"], "num_fewshot": 0, "metric": "acc,none", "category": "knowledge"},
+    "winogrande":   {"tasks": ["winogrande"], "num_fewshot": 5, "metric": "acc,none", "category": "knowledge"},
+    # Math
+    "gsm8k":        {"tasks": ["gsm8k"], "num_fewshot": 5, "metric": "exact_match,strict-match", "category": "math"},
+    # Coding
+    "humaneval":    {"tasks": ["humaneval"], "num_fewshot": 0, "metric": "pass@1,none", "category": "code"},
+    # Language
+    "boolq":        {"tasks": ["boolq"], "num_fewshot": 0, "metric": "acc,none", "category": "language"},
+}
+
+_eval_running = False
+_eval_results = {}
+
+
+@app.get("/api/eval/benchmarks")
+async def list_benchmarks():
+    """List available standard benchmarks."""
+    return {"benchmarks": {k: {"category": v["category"], "metric": v["metric"]} for k, v in BENCHMARK_REGISTRY.items()}}
+
+
+@app.post("/api/eval/run")
+async def run_eval(body: dict):
+    """Run standard benchmarks on the loaded model.
+
+    Body:
+        benchmarks: list of benchmark names (e.g. ["mmlu", "hellaswag", "gsm8k"])
+        limit: int — number of samples per task (default 50, use null for full)
+    """
+    global _eval_running, _eval_results
+    if _eval_running:
+        raise HTTPException(409, "Evaluation already in progress")
+    if _model is None:
+        raise HTTPException(400, "Load a model first")
+
+    benchmarks = body.get("benchmarks", ["hellaswag", "arc_easy", "truthfulqa"])
+    limit = body.get("limit", 50)
+
+    # Validate benchmark names
+    invalid = [b for b in benchmarks if b not in BENCHMARK_REGISTRY]
+    if invalid:
+        raise HTTPException(400, f"Unknown benchmarks: {invalid}. Available: {list(BENCHMARK_REGISTRY.keys())}")
+
+    _eval_running = True
+    _log(f"📋 Running standard evals: {benchmarks} (limit={limit})...")
+
+    try:
+        import lm_eval
+        from lm_eval.models.huggingface import HFLM
+
+        # Wrap the loaded model
+        lm = HFLM(
+            pretrained=_model.model,
+            tokenizer=_model.tokenizer,
+            batch_size=4,
+        )
+
+        # Collect all tasks
+        all_tasks = []
+        fewshot_map = {}
+        for b in benchmarks:
+            cfg = BENCHMARK_REGISTRY[b]
+            all_tasks.extend(cfg["tasks"])
+            for t in cfg["tasks"]:
+                fewshot_map[t] = cfg["num_fewshot"]
+
+        # Use highest fewshot as default (simple_evaluate uses one value)
+        # For mixed, we run each separately
+        results_out = {}
+        for b in benchmarks:
+            cfg = BENCHMARK_REGISTRY[b]
+            _log(f"   Running {b}...")
+            try:
+                kwargs = {}
+                if b == "humaneval":
+                    kwargs["confirm_run_unsafe_code"] = True
+
+                raw = lm_eval.simple_evaluate(
+                    model=lm,
+                    tasks=cfg["tasks"],
+                    num_fewshot=cfg["num_fewshot"],
+                    limit=limit,
+                    log_samples=False,
+                    **kwargs,
+                )
+
+                # Extract the score
+                task_results = raw.get("results", {})
+                # Get primary task result
+                primary_task = cfg["tasks"][0]
+                if primary_task in task_results:
+                    score = task_results[primary_task].get(cfg["metric"])
+                    if score is None:
+                        # Try without suffix
+                        for k, v in task_results[primary_task].items():
+                            if k.startswith("acc") or k.startswith("exact_match") or k.startswith("pass@"):
+                                score = v
+                                break
+                else:
+                    # Group task (e.g. mmlu) — look for aggregate
+                    for k, v in task_results.items():
+                        if cfg["metric"] in v:
+                            score = v[cfg["metric"]]
+                            break
+
+                results_out[b] = {
+                    "score": round(score * 100, 1) if score is not None else None,
+                    "metric": cfg["metric"].split(",")[0],
+                    "num_samples": limit,
+                    "category": cfg["category"],
+                    "raw": {k: {mk: mv for mk, mv in v.items() if not mk.startswith("_")}
+                            for k, v in task_results.items()},
+                }
+                _log(f"   ✓ {b}: {results_out[b]['score']}%")
+            except Exception as e:
+                results_out[b] = {"score": None, "error": str(e), "category": cfg["category"]}
+                _log(f"   ✗ {b}: {e}")
+
+        _eval_results = results_out
+        _log(f"✓ Standard eval complete: {len(results_out)} benchmarks")
+        return {"results": results_out, "model": _model_id}
+
+    except ImportError:
+        raise HTTPException(500, "lm-eval not installed. Run: pip install lm-eval")
+    except Exception as e:
+        _log(f"✗ Eval error: {e}")
+        raise HTTPException(500, str(e))
+    finally:
+        _eval_running = False
+
+
+@app.get("/api/eval/status")
+async def eval_status():
+    return {"running": _eval_running, "results": _eval_results}
+
+
+# ── Auto-Chat Arena (models talk to each other) ──────────────────────────────
+
+_autochat_running = False
+_autochat_log = []
+
+
+@app.post("/api/arena/autochat")
+async def start_autochat(body: dict):
+    """Start an auto-chat session where the model converses with itself.
+
+    Body:
+        topic: str — starting topic/prompt
+        turns: int — number of back-and-forth turns (default 5)
+        system_a: str — system prompt for Model A (default: helpful assistant)
+        system_b: str — system prompt for Model B (default: curious human)
+    """
+    global _autochat_running, _autochat_log
+    if _autochat_running:
+        raise HTTPException(409, "Auto-chat already running")
+    if _model is None:
+        raise HTTPException(400, "Load a model first")
+
+    topic = body.get("topic", "What's the most interesting thing about consciousness?")
+    turns = int(body.get("turns", 5))
+    system_a = body.get("system_a", "You are a helpful, thoughtful AI assistant. Respond conversationally.")
+    system_b = body.get("system_b", "You are a curious, intelligent human having a conversation. Ask follow-up questions and share your thoughts.")
+
+    _autochat_running = True
+    _autochat_log = []
+    _log(f"🗣️ Auto-chat: '{topic[:50]}' ({turns} turns)")
+
+    try:
+        tokenizer = _model.tokenizer
+        model = _model.model
+        device = next(model.parameters()).device
+
+        conversation = []
+        # Seed the conversation
+        conversation.append({"role": "user", "content": topic})
+        _autochat_log.append({"role": "Human", "content": topic, "turn": 0})
+
+        for turn in range(turns):
+            # Model A responds (as assistant)
+            messages_a = [{"role": "system", "content": system_a}] + conversation
+            prompt_a = tokenizer.apply_chat_template(messages_a, tokenize=False, add_generation_prompt=True)
+            inputs_a = tokenizer(prompt_a, return_tensors="pt", truncation=True, max_length=1024).to(device)
+
+            with torch.no_grad():
+                out_a = model.generate(
+                    **inputs_a, max_new_tokens=200, do_sample=True,
+                    temperature=0.8, top_p=0.9, pad_token_id=tokenizer.pad_token_id
+                )
+            response_a = tokenizer.decode(out_a[0][inputs_a["input_ids"].shape[1]:], skip_special_tokens=True).strip()
+
+            conversation.append({"role": "assistant", "content": response_a})
+            _autochat_log.append({"role": "Model A", "content": response_a, "turn": turn + 1})
+            _log(f"   Turn {turn+1}A: {response_a[:60]}...")
+
+            if turn < turns - 1:
+                # Model B responds (as the curious human asking follow-ups)
+                messages_b = [{"role": "system", "content": system_b}]
+                # Flip roles for model B: assistant messages become user, user becomes assistant
+                for msg in conversation:
+                    if msg["role"] == "assistant":
+                        messages_b.append({"role": "user", "content": msg["content"]})
+                    elif msg["role"] == "user":
+                        messages_b.append({"role": "assistant", "content": msg["content"]})
+
+                prompt_b = tokenizer.apply_chat_template(messages_b, tokenize=False, add_generation_prompt=True)
+                inputs_b = tokenizer(prompt_b, return_tensors="pt", truncation=True, max_length=1024).to(device)
+
+                with torch.no_grad():
+                    out_b = model.generate(
+                        **inputs_b, max_new_tokens=150, do_sample=True,
+                        temperature=0.9, top_p=0.9, pad_token_id=tokenizer.pad_token_id
+                    )
+                response_b = tokenizer.decode(out_b[0][inputs_b["input_ids"].shape[1]:], skip_special_tokens=True).strip()
+
+                conversation.append({"role": "user", "content": response_b})
+                _autochat_log.append({"role": "Model B", "content": response_b, "turn": turn + 1})
+                _log(f"   Turn {turn+1}B: {response_b[:60]}...")
+
+        _log(f"✓ Auto-chat complete: {len(_autochat_log)} messages")
+        return {"messages": _autochat_log, "turns": turns, "topic": topic}
+
+    except Exception as e:
+        _log(f"✗ Auto-chat error: {e}")
+        raise HTTPException(500, str(e))
+    finally:
+        _autochat_running = False
+
+
+@app.get("/api/arena/autochat/status")
+async def autochat_status():
+    return {"running": _autochat_running, "messages": _autochat_log}
+
+
+@app.post("/api/arena/compare")
+async def compare_prompt(body: dict):
+    """Send same prompt to loaded model twice with different temperatures for comparison."""
+    if _model is None:
+        raise HTTPException(400, "Load a model first")
+
+    prompt = body.get("prompt", "").strip()
+    if not prompt:
+        raise HTTPException(400, "prompt required")
+
+    tokenizer = _model.tokenizer
+    model = _model.model
+    device = next(model.parameters()).device
+
+    messages = [{"role": "user", "content": prompt}]
+    text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+    inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=512).to(device)
+
+    results = {}
+    # Model A: low temperature (precise)
+    with torch.no_grad():
+        out_a = model.generate(**inputs, max_new_tokens=256, do_sample=True, temperature=0.3, top_p=0.9, pad_token_id=tokenizer.pad_token_id)
+    results["response_a"] = tokenizer.decode(out_a[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True).strip()
+
+    # Model B: high temperature (creative)
+    with torch.no_grad():
+        out_b = model.generate(**inputs, max_new_tokens=256, do_sample=True, temperature=0.9, top_p=0.95, pad_token_id=tokenizer.pad_token_id)
+    results["response_b"] = tokenizer.decode(out_b[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True).strip()
+
+    results["config_a"] = {"temperature": 0.3, "label": "Precise (t=0.3)"}
+    results["config_b"] = {"temperature": 0.9, "label": "Creative (t=0.9)"}
+
+    return results
+
+
 # ── Upload ────────────────────────────────────────────────────────────────────
 
 @app.post("/api/upload")

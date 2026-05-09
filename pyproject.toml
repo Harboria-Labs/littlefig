@@ -34,6 +34,12 @@ train = [
     "datasets>=2.18.0,<4.0.0",
 ]
 
+# Standard LLM benchmarks: pip install -e ".[eval]"
+eval = [
+    "lm-eval>=0.4.0",
+    "datasets>=2.18.0,<4.0.0",
+]
+
 # Full install (inference + training + memory)
 full = [
     "datasets>=2.18.0,<4.0.0",

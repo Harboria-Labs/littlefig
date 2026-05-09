@@ -223,16 +223,85 @@ footer{display:none!important}
 
   <!-- ═══ FIGSPACE ═══ -->
   <div id="pg-arena" class="page hidden flex-1 overflow-y-auto p-6">
-    <div class="max-w-5xl mx-auto space-y-6">
-      <div><h2 class="text-base font-bold text-purple-400">⚔️ FigSpace Arena</h2><p class="text-xs text-zinc-500 mt-1">Side-by-side model comparison. Same prompt, different models. Blind evaluation.</p></div>
-      <div class="grid grid-cols-2 gap-4">
-        <div class="card space-y-2"><span class="label">Model A</span><input class="input text-xs" placeholder="HF model ID…"><div class="h-56 rounded-lg bg-black/20 border border-white/5 p-3 text-xs text-zinc-600 overflow-y-auto mt-2 light:bg-zinc-100 light:border-zinc-200" id="arena-a">Response appears here</div></div>
-        <div class="card space-y-2"><span class="label">Model B</span><input class="input text-xs" placeholder="HF model ID…"><div class="h-56 rounded-lg bg-black/20 border border-white/5 p-3 text-xs text-zinc-600 overflow-y-auto mt-2 light:bg-zinc-100 light:border-zinc-200" id="arena-b">Response appears here</div></div>
+    <div class="max-w-5xl mx-auto space-y-8">
+      <div><h2 class="text-base font-bold text-purple-400">⚔️ FigSpace Arena</h2><p class="text-xs text-zinc-500 mt-1">Auto-chat · Side-by-side comparison · Standard LLM benchmarks</p></div>
+
+      <!-- ══ Section 1: Auto-Chat ══ -->
+      <div class="space-y-3">
+        <div class="flex items-center justify-between"><div class="text-sm font-bold text-purple-400">🗣️ Auto-Chat</div><div class="text-[10px] text-zinc-600">Model talks to itself — observe the conversation</div></div>
+        <div class="card space-y-3">
+          <div class="grid grid-cols-3 gap-3">
+            <div class="col-span-2"><label class="text-[11px] text-zinc-500">Starting topic</label><input id="ac-topic" class="input mt-1 text-xs" value="What's the most interesting unsolved problem in science?"></div>
+            <div><label class="text-[11px] text-zinc-500">Turns</label><input id="ac-turns" type="number" class="input mt-1 text-xs" value="5" min="1" max="20"></div>
+          </div>
+          <details class="text-[11px]"><summary class="text-zinc-500 cursor-pointer hover:text-zinc-300">System prompts (advanced)</summary>
+            <div class="grid grid-cols-2 gap-3 mt-2">
+              <div><label class="text-[10px] text-zinc-600">Model A (assistant)</label><textarea id="ac-sys-a" class="input mt-1 text-[11px]" rows="2">You are a helpful, thoughtful AI assistant. Respond conversationally.</textarea></div>
+              <div><label class="text-[10px] text-zinc-600">Model B (curious human)</label><textarea id="ac-sys-b" class="input mt-1 text-[11px]" rows="2">You are a curious, intelligent human having a conversation. Ask follow-up questions and share your thoughts.</textarea></div>
+            </div>
+          </details>
+          <button onclick="startAutoChat()" id="ac-btn" class="btn btn-primary btn-sm">▶ Start Auto-Chat</button>
+        </div>
+        <div id="ac-messages" class="space-y-2 max-h-96 overflow-y-auto"></div>
       </div>
-      <div class="text-center space-y-3">
-        <textarea class="input max-w-xl mx-auto text-sm" rows="2" placeholder="Enter a prompt for both models…"></textarea>
-        <div><button class="btn btn-primary">⚔️ Compare</button></div>
+
+      <div class="divider"></div>
+
+      <!-- ══ Section 2: Side-by-Side Comparison ══ -->
+      <div class="space-y-3">
+        <div class="text-sm font-bold text-purple-400">⚔️ Side-by-Side Comparison</div>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="card space-y-2"><span class="badge badge-green text-[9px]">A · Precise (t=0.3)</span><div class="h-48 rounded-lg bg-black/20 border border-white/5 p-3 text-xs text-zinc-500 overflow-y-auto mt-2 leading-relaxed light:bg-zinc-100 light:border-zinc-200" id="arena-a">Send a prompt to compare responses</div></div>
+          <div class="card space-y-2"><span class="badge badge-amber text-[9px]">B · Creative (t=0.9)</span><div class="h-48 rounded-lg bg-black/20 border border-white/5 p-3 text-xs text-zinc-500 overflow-y-auto mt-2 leading-relaxed light:bg-zinc-100 light:border-zinc-200" id="arena-b">Send a prompt to compare responses</div></div>
+        </div>
+        <div class="flex gap-2 items-end">
+          <textarea id="arena-prompt" class="input flex-1 text-sm" rows="2" placeholder="Enter a prompt — same input, two different sampling strategies…"></textarea>
+          <button onclick="arenaCompare()" id="arena-cmp-btn" class="btn btn-primary">⚔️ Compare</button>
+        </div>
       </div>
+
+      <div class="divider"></div>
+
+      <!-- ══ Section 3: Standard LLM Benchmarks ══ -->
+      <div class="space-y-3">
+        <div class="flex items-center justify-between">
+          <div><div class="text-sm font-bold text-purple-400">📋 Standard Benchmarks</div><div class="text-[10px] text-zinc-600 mt-0.5">Industry-standard evaluations via lm-eval-harness</div></div>
+          <button onclick="runStdEval()" id="eval-btn" class="btn btn-primary btn-sm">▶ Run Selected</button>
+        </div>
+        <div class="card space-y-3">
+          <div class="grid grid-cols-3 gap-x-4 gap-y-1 text-[11px]">
+            <div class="text-zinc-600 font-bold col-span-3 mb-1">Knowledge & Reasoning</div>
+            <label class="flex items-center gap-2 text-zinc-400 cursor-pointer"><input type="checkbox" class="eval-cb accent-purple-500" value="mmlu" checked>MMLU (57 subjects)</label>
+            <label class="flex items-center gap-2 text-zinc-400 cursor-pointer"><input type="checkbox" class="eval-cb accent-purple-500" value="hellaswag" checked>HellaSwag</label>
+            <label class="flex items-center gap-2 text-zinc-400 cursor-pointer"><input type="checkbox" class="eval-cb accent-purple-500" value="arc_challenge">ARC Challenge</label>
+            <label class="flex items-center gap-2 text-zinc-400 cursor-pointer"><input type="checkbox" class="eval-cb accent-purple-500" value="truthfulqa" checked>TruthfulQA</label>
+            <label class="flex items-center gap-2 text-zinc-400 cursor-pointer"><input type="checkbox" class="eval-cb accent-purple-500" value="winogrande">WinoGrande</label>
+            <label class="flex items-center gap-2 text-zinc-400 cursor-pointer"><input type="checkbox" class="eval-cb accent-purple-500" value="arc_easy">ARC Easy</label>
+
+            <div class="text-zinc-600 font-bold col-span-3 mt-2 mb-1">Math</div>
+            <label class="flex items-center gap-2 text-zinc-400 cursor-pointer"><input type="checkbox" class="eval-cb accent-purple-500" value="gsm8k" checked>GSM8K</label>
+
+            <div class="text-zinc-600 font-bold col-span-3 mt-2 mb-1">Code</div>
+            <label class="flex items-center gap-2 text-zinc-400 cursor-pointer"><input type="checkbox" class="eval-cb accent-purple-500" value="humaneval">HumanEval</label>
+
+            <div class="text-zinc-600 font-bold col-span-3 mt-2 mb-1">Language</div>
+            <label class="flex items-center gap-2 text-zinc-400 cursor-pointer"><input type="checkbox" class="eval-cb accent-purple-500" value="boolq">BoolQ</label>
+          </div>
+          <div class="flex items-center gap-3">
+            <label class="text-[11px] text-zinc-500">Samples per task:</label>
+            <input id="eval-limit" type="number" class="input w-20 text-xs" value="50" min="10" max="1000">
+            <span class="text-[10px] text-zinc-600">(50 = quick ~2min, null = full)</span>
+          </div>
+        </div>
+
+        <!-- Results table -->
+        <div id="eval-results" class="card hidden">
+          <div class="text-xs font-bold text-purple-400 mb-3">Results</div>
+          <div id="eval-table" class="space-y-1.5"></div>
+        </div>
+        <div id="eval-progress" class="hidden text-center text-xs text-purple-400 font-mono py-2">Running evaluations...</div>
+      </div>
+
     </div>
   </div>
 
@@ -745,6 +814,86 @@ async function runBench(){
     $('#bench-progress-text').textContent='✗ '+e.message;
   }
   setTimeout(()=>{$('#bench-btn').disabled=false;$('#bench-btn').textContent='▶ Run All'},4000);
+}
+
+// ── Arena: Auto-Chat ────────────────────────────────────────────────────────
+async function startAutoChat(){
+  const btn=$('#ac-btn');btn.disabled=true;btn.textContent='⏳ Running…';
+  $('#ac-messages').innerHTML='';
+  try{
+    const r=await fetch('/api/arena/autochat',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({topic:$('#ac-topic').value,turns:parseInt($('#ac-turns').value),
+        system_a:$('#ac-sys-a').value,system_b:$('#ac-sys-b').value})});
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.detail||'Failed');
+    let html='';
+    d.messages.forEach(m=>{
+      const isA=m.role==='Model A';
+      const isHuman=m.role==='Human';
+      const color=isA?'text-fig-400':isHuman?'text-zinc-400':'text-amber-400';
+      const bg=isA?'border-fig-500/20':'border-amber-500/20';
+      html+=`<div class="card ${bg} py-2 px-3"><div class="flex items-center gap-2 mb-1"><span class="text-[10px] font-bold ${color}">${m.role}</span><span class="text-[9px] text-zinc-700">turn ${m.turn}</span></div><div class="text-xs text-zinc-300 leading-relaxed light:text-zinc-700">${esc(m.content)}</div></div>`;
+    });
+    $('#ac-messages').innerHTML=html;
+    btn.textContent='✓ Done';
+  }catch(e){$('#ac-messages').innerHTML=`<div class="text-red-400 text-xs">✗ ${e.message}</div>`;btn.textContent='✗ Error'}
+  setTimeout(()=>{btn.disabled=false;btn.textContent='▶ Start Auto-Chat'},3000);
+}
+
+// ── Arena: Side-by-Side ─────────────────────────────────────────────────────
+async function arenaCompare(){
+  const btn=$('#arena-cmp-btn');const prompt=$('#arena-prompt').value.trim();
+  if(!prompt)return;
+  btn.disabled=true;btn.textContent='⏳…';
+  $('#arena-a').textContent='Generating (precise)…';$('#arena-b').textContent='Generating (creative)…';
+  try{
+    const r=await fetch('/api/arena/compare',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({prompt})});
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.detail||'Failed');
+    $('#arena-a').textContent=d.response_a;
+    $('#arena-b').textContent=d.response_b;
+    btn.textContent='✓';
+  }catch(e){$('#arena-a').textContent='Error: '+e.message;$('#arena-b').textContent='';btn.textContent='✗'}
+  setTimeout(()=>{btn.disabled=false;btn.textContent='⚔️ Compare'},2000);
+}
+
+// ── Arena: Standard Benchmarks ──────────────────────────────────────────────
+async function runStdEval(){
+  const btn=$('#eval-btn');btn.disabled=true;btn.textContent='⏳ Running…';
+  $('#eval-progress').classList.remove('hidden');
+  $('#eval-progress').textContent='Running evaluations… this may take several minutes per benchmark.';
+  const cbs=document.querySelectorAll('.eval-cb:checked');
+  const benchmarks=Array.from(cbs).map(cb=>cb.value);
+  const limit=parseInt($('#eval-limit').value)||50;
+  if(!benchmarks.length){btn.disabled=false;btn.textContent='▶ Run Selected';$('#eval-progress').textContent='Select at least one benchmark';return}
+  try{
+    const r=await fetch('/api/eval/run',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({benchmarks,limit})});
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.detail||'Failed');
+    // Render results
+    $('#eval-results').classList.remove('hidden');
+    let html='';
+    for(const[name,res]of Object.entries(d.results)){
+      const score=res.score!==null?res.score+'%':'—';
+      const color=res.score>=70?'text-fig-400':res.score>=40?'text-amber-400':'text-red-400';
+      const barW=res.score||0;
+      const err=res.error?`<span class="text-red-400 text-[10px] ml-2">${res.error}</span>`:'';
+      html+=`<div class="flex items-center gap-3">
+        <div class="w-28 text-[11px] font-mono text-zinc-400">${name}</div>
+        <div class="flex-1"><div class="w-full bg-zinc-800 rounded-full h-1.5 light:bg-zinc-200"><div class="bg-purple-500 h-1.5 rounded-full" style="width:${barW}%"></div></div></div>
+        <div class="w-14 text-right text-xs font-bold ${color}">${score}</div>
+        <div class="w-16 text-[10px] text-zinc-600">${res.metric||''}</div>${err}
+      </div>`;
+    }
+    $('#eval-table').innerHTML=html;
+    $('#eval-progress').textContent=`✓ ${benchmarks.length} benchmarks complete (${limit} samples each)`;
+    btn.textContent='✓ Complete';
+  }catch(e){
+    $('#eval-progress').textContent='✗ '+e.message;btn.textContent='✗ Error';
+  }
+  setTimeout(()=>{btn.disabled=false;btn.textContent='▶ Run Selected';$('#eval-progress').classList.add('hidden')},5000);
 }
 
 // ── CogMemBench ─────────────────────────────────────────────────────────────
