@@ -445,325 +445,252 @@ async def stop_training():
 
 # ── Benchmarks ────────────────────────────────────────────────────────────────
 
+_bench_running = False
+_bench_results = None
+
 @app.post("/api/bench/run")
 async def run_benchmarks():
-    """Run comprehensive benchmarks: FigQuant, all FigKernels, inference, training, memory."""
-    _log("📊 Running full benchmark suite...")
-    results = {}
+    """Run comprehensive benchmarks in background thread."""
+    global _bench_running, _bench_results
+    if _bench_running:
+        raise HTTPException(409, "Benchmarks already running")
+    _bench_running = True
+    _bench_results = None
+    _log("📊 Running full benchmark suite (background)...")
 
-    try:
-        import torch
-        import torch.nn as nn
-        import torch.nn.functional as F
-        import time as _t
-        import psutil
-        import gc
-        from little_fig.engine.figquant import figquant_quantize, figquant_dequantize, measure_quality
-        from little_fig.engine.figkernel import (
-            FigRMSNorm, FigSwiGLU, FigCrossEntropy,
-            fig_fused_linear_lora, fig_chunked_cross_entropy,
-        )
+    def _run():
+        global _bench_running, _bench_results
+        try:
+            import torch
+            import torch.nn as nn
+            import torch.nn.functional as F
+            import time as _t
+            import psutil
+            import gc
+            from little_fig.engine.figquant import figquant_quantize, figquant_dequantize, measure_quality
+            from little_fig.engine.figkernel import (
+                FigRMSNorm, FigSwiGLU, FigCrossEntropy,
+                fig_fused_linear_lora, fig_chunked_cross_entropy,
+            )
 
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+            results = {}
+            device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        # ─── 1. FigQuant Quality ─────────────────────────────────────────────
-        _log("   [1/5] FigQuant quality...")
-        W = torch.randn(2048, 768)
-        fq = figquant_quantize(W, group_size=128, n_iters=8)
-        qual = measure_quality(W, fq)
-        results["figquant"] = {
-            "cosine_similarity": round(qual["cosine_similarity"], 6),
-            "mse": round(qual["mse"], 6),
-            "snr_db": round(qual["snr_db"], 1),
-            "bits_per_param": round(qual["bits_per_param"], 2),
-            "compression_ratio": round(qual["compression_ratio"], 1),
-        }
+            _log("   [1/5] FigQuant quality...")
+            W = torch.randn(2048, 768)
+            fq = figquant_quantize(W, group_size=128, n_iters=8)
+            qual = measure_quality(W, fq)
+            results["figquant"] = {
+                "cosine_similarity": round(qual["cosine_similarity"], 6),
+                "mse": round(qual["mse"], 6),
+                "snr_db": round(qual["snr_db"], 1),
+                "bits_per_param": round(qual["bits_per_param"], 2),
+                "compression_ratio": round(qual["compression_ratio"], 1),
+            }
+            _bench_results = dict(results)
 
-        # ─── 2. All FigKernels ───────────────────────────────────────────────
-        _log("   [2/5] FigKernel benchmarks...")
-        hidden = 2048
-        inter = 5504
-        batch, seq = 4, 256
+            _log("   [2/5] FigKernel benchmarks...")
+            hidden = 2048; inter = 5504; batch, seq = 4, 256
+            x = torch.randn(batch, seq, hidden, device=device)
+            weight = torch.ones(hidden, device=device)
+            norm = FigRMSNorm(hidden).to(device)
 
-        # 2a. RMSNorm
-        x = torch.randn(batch, seq, hidden, device=device)
-        weight = torch.ones(hidden, device=device)
-        norm = FigRMSNorm(hidden).to(device)
+            times = []
+            for _ in range(5):
+                t0 = _t.time()
+                for _ in range(20):
+                    _ = x.pow(2).mean(-1, keepdim=True); _ = x * torch.rsqrt(_ + 1e-6) * weight
+                times.append((_t.time() - t0) / 20 * 1000)
+            rmsnorm_std_ms = sum(times) / len(times)
 
-        times = []
-        for _ in range(5):
-            t0 = _t.time()
-            for _ in range(20):
-                _ = x.pow(2).mean(-1, keepdim=True)
-                _ = x * torch.rsqrt(_ + 1e-6) * weight
-            times.append((_t.time() - t0) / 20 * 1000)
-        rmsnorm_std_ms = sum(times) / len(times)
+            times = []
+            for _ in range(5):
+                t0 = _t.time()
+                for _ in range(20): _ = norm(x)
+                times.append((_t.time() - t0) / 20 * 1000)
+            rmsnorm_fig_ms = sum(times) / len(times)
 
-        times = []
-        for _ in range(5):
-            t0 = _t.time()
-            for _ in range(20):
-                _ = norm(x)
-            times.append((_t.time() - t0) / 20 * 1000)
-        rmsnorm_fig_ms = sum(times) / len(times)
+            swiglu = FigSwiGLU(hidden, inter).to(device)
+            x_mlp = torch.randn(batch, seq, hidden, device=device)
+            gate_w = torch.randn(inter, hidden, device=device)
+            up_w = torch.randn(inter, hidden, device=device)
+            down_w = torch.randn(hidden, inter, device=device)
 
-        # 2b. SwiGLU
-        swiglu = FigSwiGLU(hidden, inter).to(device)
-        x_mlp = torch.randn(batch, seq, hidden, device=device)
+            times = []
+            for _ in range(5):
+                t0 = _t.time()
+                for _ in range(10):
+                    g = F.silu(F.linear(x_mlp, gate_w)); u = F.linear(x_mlp, up_w); _ = F.linear(g * u, down_w)
+                times.append((_t.time() - t0) / 10 * 1000)
+            swiglu_std_ms = sum(times) / len(times)
 
-        # Standard SwiGLU
-        gate_w = torch.randn(inter, hidden, device=device)
-        up_w = torch.randn(inter, hidden, device=device)
-        down_w = torch.randn(hidden, inter, device=device)
-        times = []
-        for _ in range(5):
-            t0 = _t.time()
-            for _ in range(10):
-                g = F.silu(F.linear(x_mlp, gate_w))
-                u = F.linear(x_mlp, up_w)
-                _ = F.linear(g * u, down_w)
-            times.append((_t.time() - t0) / 10 * 1000)
-        swiglu_std_ms = sum(times) / len(times)
+            times = []
+            for _ in range(5):
+                t0 = _t.time()
+                for _ in range(10): _ = swiglu(x_mlp)
+                times.append((_t.time() - t0) / 10 * 1000)
+            swiglu_fig_ms = sum(times) / len(times)
 
-        times = []
-        for _ in range(5):
-            t0 = _t.time()
-            for _ in range(10):
-                _ = swiglu(x_mlp)
-            times.append((_t.time() - t0) / 10 * 1000)
-        swiglu_fig_ms = sum(times) / len(times)
+            vocab_size = 32000; n_tokens = batch * seq
+            hidden_flat = torch.randn(n_tokens, hidden, device=device)
+            lm_head = torch.randn(vocab_size, hidden, device=device)
+            targets = torch.randint(0, vocab_size, (n_tokens,), device=device)
 
-        # 2c. CrossEntropy (chunked vs standard)
-        vocab_size = 32000
-        n_tokens = batch * seq
-        hidden_flat = torch.randn(n_tokens, hidden, device=device)
-        lm_head = torch.randn(vocab_size, hidden, device=device)
-        targets = torch.randint(0, vocab_size, (n_tokens,), device=device)
+            times = []
+            for _ in range(3):
+                t0 = _t.time(); logits = F.linear(hidden_flat, lm_head); _ = F.cross_entropy(logits, targets)
+                times.append((_t.time() - t0) * 1000)
+            ce_std_ms = sum(times) / len(times)
 
-        times = []
-        for _ in range(3):
-            t0 = _t.time()
-            logits = F.linear(hidden_flat, lm_head)
-            _ = F.cross_entropy(logits, targets)
-            times.append((_t.time() - t0) * 1000)
-        ce_std_ms = sum(times) / len(times)
+            times = []
+            for _ in range(3):
+                t0 = _t.time(); _ = fig_chunked_cross_entropy(hidden_flat, lm_head, targets, chunk_size=8192)
+                times.append((_t.time() - t0) * 1000)
+            ce_fig_ms = sum(times) / len(times)
 
-        times = []
-        for _ in range(3):
-            t0 = _t.time()
-            _ = fig_chunked_cross_entropy(hidden_flat, lm_head, targets, chunk_size=8192)
-            times.append((_t.time() - t0) * 1000)
-        ce_fig_ms = sum(times) / len(times)
+            if device == "cuda":
+                torch.cuda.reset_peak_memory_stats()
+                logits = F.linear(hidden_flat, lm_head); _ = F.cross_entropy(logits, targets)
+                ce_std_mem_mb = torch.cuda.max_memory_allocated() / 1e6
+                torch.cuda.reset_peak_memory_stats()
+                _ = fig_chunked_cross_entropy(hidden_flat, lm_head, targets, chunk_size=8192)
+                ce_fig_mem_mb = torch.cuda.max_memory_allocated() / 1e6
+            else:
+                ce_std_mem_mb = n_tokens * vocab_size * 4 / 1e6
+                ce_fig_mem_mb = n_tokens * 8192 * 4 / 1e6
 
-        # Peak memory for standard vs chunked CE
-        gc.collect()
-        if device == "cuda":
-            torch.cuda.reset_peak_memory_stats()
-            logits = F.linear(hidden_flat, lm_head)
-            _ = F.cross_entropy(logits, targets)
-            ce_std_mem_mb = torch.cuda.max_memory_allocated() / 1e6
-            torch.cuda.reset_peak_memory_stats()
-            _ = fig_chunked_cross_entropy(hidden_flat, lm_head, targets, chunk_size=8192)
-            ce_fig_mem_mb = torch.cuda.max_memory_allocated() / 1e6
-        else:
-            # Estimate: standard materializes [n_tokens, vocab] float32
-            ce_std_mem_mb = n_tokens * vocab_size * 4 / 1e6
-            ce_fig_mem_mb = n_tokens * 8192 * 4 / 1e6  # only one chunk at a time
+            W_base = torch.randn(hidden, hidden, device=device)
+            lora_A = torch.randn(hidden, 16, device=device)
+            lora_B = torch.randn(16, hidden, device=device)
+            x_lin = torch.randn(batch, seq, hidden, device=device)
 
-        # 2d. Fused Linear+LoRA
-        W_base = torch.randn(hidden, hidden, device=device)
-        lora_A = torch.randn(hidden, 16, device=device)
-        lora_B = torch.randn(16, hidden, device=device)
-        x_lin = torch.randn(batch, seq, hidden, device=device)
+            times = []
+            for _ in range(5):
+                t0 = _t.time()
+                for _ in range(20): h = F.linear(x_lin, W_base); h = h + (x_lin @ lora_A) @ lora_B * 2.0
+                times.append((_t.time() - t0) / 20 * 1000)
+            lora_std_ms = sum(times) / len(times)
 
-        times = []
-        for _ in range(5):
-            t0 = _t.time()
-            for _ in range(20):
-                h = F.linear(x_lin, W_base)
-                h = h + (x_lin @ lora_A) @ lora_B * (32 / 16)
-            times.append((_t.time() - t0) / 20 * 1000)
-        lora_std_ms = sum(times) / len(times)
+            times = []
+            for _ in range(5):
+                t0 = _t.time()
+                for _ in range(20): _ = fig_fused_linear_lora(x_lin, W_base, lora_A, lora_B, 2.0)
+                times.append((_t.time() - t0) / 20 * 1000)
+            lora_fig_ms = sum(times) / len(times)
 
-        times = []
-        for _ in range(5):
-            t0 = _t.time()
-            for _ in range(20):
-                _ = fig_fused_linear_lora(x_lin, W_base, lora_A, lora_B, 32 / 16)
-            times.append((_t.time() - t0) / 20 * 1000)
-        lora_fig_ms = sum(times) / len(times)
+            results["figkernel"] = {
+                "rmsnorm_standard_ms": round(rmsnorm_std_ms, 3), "rmsnorm_fig_ms": round(rmsnorm_fig_ms, 3),
+                "rmsnorm_speedup": round(rmsnorm_std_ms / max(rmsnorm_fig_ms, 0.001), 2),
+                "swiglu_standard_ms": round(swiglu_std_ms, 3), "swiglu_fig_ms": round(swiglu_fig_ms, 3),
+                "swiglu_speedup": round(swiglu_std_ms / max(swiglu_fig_ms, 0.001), 2),
+                "crossentropy_standard_ms": round(ce_std_ms, 2), "crossentropy_fig_ms": round(ce_fig_ms, 2),
+                "crossentropy_speedup": round(ce_std_ms / max(ce_fig_ms, 0.01), 2),
+                "crossentropy_std_mem_mb": round(ce_std_mem_mb, 1), "crossentropy_fig_mem_mb": round(ce_fig_mem_mb, 1),
+                "crossentropy_mem_savings": round(ce_std_mem_mb / max(ce_fig_mem_mb, 0.01), 1),
+                "linear_lora_standard_ms": round(lora_std_ms, 3), "linear_lora_fig_ms": round(lora_fig_ms, 3),
+                "linear_lora_speedup": round(lora_std_ms / max(lora_fig_ms, 0.001), 2),
+            }
+            _bench_results = dict(results)
 
-        results["figkernel"] = {
-            "rmsnorm_standard_ms": round(rmsnorm_std_ms, 3),
-            "rmsnorm_fig_ms": round(rmsnorm_fig_ms, 3),
-            "rmsnorm_speedup": round(rmsnorm_std_ms / max(rmsnorm_fig_ms, 0.001), 2),
-            "swiglu_standard_ms": round(swiglu_std_ms, 3),
-            "swiglu_fig_ms": round(swiglu_fig_ms, 3),
-            "swiglu_speedup": round(swiglu_std_ms / max(swiglu_fig_ms, 0.001), 2),
-            "crossentropy_standard_ms": round(ce_std_ms, 2),
-            "crossentropy_fig_ms": round(ce_fig_ms, 2),
-            "crossentropy_speedup": round(ce_std_ms / max(ce_fig_ms, 0.01), 2),
-            "crossentropy_std_mem_mb": round(ce_std_mem_mb, 1),
-            "crossentropy_fig_mem_mb": round(ce_fig_mem_mb, 1),
-            "crossentropy_mem_savings": round(ce_std_mem_mb / max(ce_fig_mem_mb, 0.01), 1),
-            "linear_lora_standard_ms": round(lora_std_ms, 3),
-            "linear_lora_fig_ms": round(lora_fig_ms, 3),
-            "linear_lora_speedup": round(lora_std_ms / max(lora_fig_ms, 0.001), 2),
-        }
-
-        # ─── 3. Inference Speed ──────────────────────────────────────────────
-        _log("   [3/5] Inference speed...")
-        inference_results = {}
-        if _model is not None:
-            try:
-                tokenizer = _model.tokenizer
-                test_prompt = "The meaning of life is"
-                inputs = tokenizer(test_prompt, return_tensors="pt")
-                input_ids = inputs["input_ids"].to(device)
-
-                # Warmup
-                with torch.no_grad():
-                    _model.model.eval()
-                    _ = _model.model.generate(input_ids, max_new_tokens=5, do_sample=False)
-
-                # Timed generation
-                gen_lengths = [32, 64, 128]
-                for length in gen_lengths:
-                    t0 = _t.time()
+            _log("   [3/5] Inference speed...")
+            inference_results = {}
+            if _model is not None:
+                try:
+                    tokenizer = _model.tokenizer
+                    test_prompt = "The meaning of life is"
+                    inputs = tokenizer(test_prompt, return_tensors="pt")
+                    input_ids = inputs["input_ids"].to(device)
                     with torch.no_grad():
-                        out = _model.model.generate(input_ids, max_new_tokens=length, do_sample=False)
-                    elapsed = _t.time() - t0
-                    n_generated = out.shape[1] - input_ids.shape[1]
-                    tok_per_sec = n_generated / max(elapsed, 0.001)
-                    inference_results[f"gen_{length}_tok_per_sec"] = round(tok_per_sec, 1)
-                    inference_results[f"gen_{length}_time_s"] = round(elapsed, 3)
+                        _model.model.eval()
+                        _ = _model.model.generate(input_ids, max_new_tokens=5, do_sample=False)
+                    for length in [32, 64, 128]:
+                        t0 = _t.time()
+                        with torch.no_grad():
+                            out = _model.model.generate(input_ids, max_new_tokens=length, do_sample=False)
+                        elapsed = _t.time() - t0
+                        n_gen = out.shape[1] - input_ids.shape[1]
+                        inference_results[f"gen_{length}_tok_per_sec"] = round(n_gen / max(elapsed, 0.001), 1)
+                        inference_results[f"gen_{length}_time_s"] = round(elapsed, 3)
+                    t0 = _t.time()
+                    with torch.no_grad(): _ = _model.model.generate(input_ids, max_new_tokens=1, do_sample=False)
+                    inference_results["ttft_ms"] = round((_t.time() - t0) * 1000, 1)
+                except Exception as e:
+                    inference_results["error"] = str(e)
+            else:
+                inference_results["error"] = "No model loaded"
+            results["inference"] = inference_results
+            _bench_results = dict(results)
 
-                # Time to first token (TTFT)
-                t0 = _t.time()
-                with torch.no_grad():
-                    _ = _model.model.generate(input_ids, max_new_tokens=1, do_sample=False)
-                inference_results["ttft_ms"] = round((_t.time() - t0) * 1000, 1)
-
-            except Exception as e:
-                inference_results["error"] = str(e)
-        else:
-            inference_results["error"] = "No model loaded — load a model to benchmark inference"
-
-        results["inference"] = inference_results
-
-        # ─── 4. Training Throughput ──────────────────────────────────────────
-        _log("   [4/5] Training throughput...")
-        training_results = {}
-        if _model is not None:
-            try:
-                tokenizer = _model.tokenizer
-                # Create a small batch of training data
-                texts = [
-                    "The quick brown fox jumps over the lazy dog.",
-                    "Machine learning models require large amounts of data.",
-                    "GPU acceleration significantly speeds up neural network training.",
-                    "Little Fig trains LLMs on CPU with minimal memory overhead.",
-                ]
-                batch_enc = tokenizer(
-                    texts, return_tensors="pt", padding="max_length",
-                    truncation=True, max_length=128
-                )
-                input_ids = batch_enc["input_ids"].to(device)
-                attention_mask = batch_enc["attention_mask"].to(device)
-
-                _model.model.train()
-                # Enable grad for LoRA params
-                optimizer = torch.optim.AdamW(
-                    [p for p in _model.parameters() if p.requires_grad],
-                    lr=2e-4
-                )
-
-                # Warmup step
-                outputs = _model.model(input_ids=input_ids, attention_mask=attention_mask, labels=input_ids)
-                outputs.loss.backward()
-                optimizer.zero_grad()
-
-                # Timed training steps
-                n_steps = 5
-                t0 = _t.time()
-                total_tokens = 0
-                for step in range(n_steps):
+            _log("   [4/5] Training throughput...")
+            training_results = {}
+            if _model is not None:
+                try:
+                    tokenizer = _model.tokenizer
+                    texts = ["The quick brown fox.", "Machine learning models.", "GPU acceleration.", "Little Fig trains LLMs."]
+                    batch_enc = tokenizer(texts, return_tensors="pt", padding="max_length", truncation=True, max_length=128)
+                    input_ids = batch_enc["input_ids"].to(device)
+                    attention_mask = batch_enc["attention_mask"].to(device)
+                    _model.model.train()
+                    optimizer = torch.optim.AdamW([p for p in _model.parameters() if p.requires_grad], lr=2e-4)
                     outputs = _model.model(input_ids=input_ids, attention_mask=attention_mask, labels=input_ids)
-                    outputs.loss.backward()
-                    optimizer.step()
-                    optimizer.zero_grad()
-                    total_tokens += attention_mask.sum().item()
-                elapsed = _t.time() - t0
+                    outputs.loss.backward(); optimizer.zero_grad()
+                    n_steps = 5; t0 = _t.time(); total_tokens = 0
+                    for step in range(n_steps):
+                        outputs = _model.model(input_ids=input_ids, attention_mask=attention_mask, labels=input_ids)
+                        outputs.loss.backward(); optimizer.step(); optimizer.zero_grad()
+                        total_tokens += attention_mask.sum().item()
+                    elapsed = _t.time() - t0
+                    training_results = {"steps": n_steps, "total_time_s": round(elapsed, 2),
+                        "step_time_ms": round(elapsed / n_steps * 1000, 1),
+                        "tokens_per_sec": round(total_tokens / elapsed, 1),
+                        "samples_per_sec": round(n_steps * len(texts) / elapsed, 2),
+                        "last_loss": round(outputs.loss.item(), 4)}
+                    _model.model.eval()
+                except Exception as e:
+                    training_results["error"] = str(e)
+            else:
+                training_results["error"] = "No model loaded"
+            results["training"] = training_results
+            _bench_results = dict(results)
 
-                training_results["steps"] = n_steps
-                training_results["total_time_s"] = round(elapsed, 2)
-                training_results["step_time_ms"] = round(elapsed / n_steps * 1000, 1)
-                training_results["tokens_per_sec"] = round(total_tokens / elapsed, 1)
-                training_results["samples_per_sec"] = round(n_steps * len(texts) / elapsed, 2)
-                training_results["last_loss"] = round(outputs.loss.item(), 4)
+            _log("   [5/5] Memory profiling...")
+            mem = psutil.virtual_memory()
+            memory_results = {"system_ram_total_gb": round(mem.total / 1e9, 1),
+                "system_ram_used_gb": round(mem.used / 1e9, 1),
+                "system_ram_available_gb": round(mem.available / 1e9, 1),
+                "system_ram_percent": mem.percent}
+            if device == "cuda":
+                memory_results["gpu_vram_total_gb"] = round(torch.cuda.get_device_properties(0).total_mem / 1e9, 1)
+                memory_results["gpu_vram_allocated_gb"] = round(torch.cuda.memory_allocated() / 1e9, 2)
+                memory_results["gpu_vram_reserved_gb"] = round(torch.cuda.memory_reserved() / 1e9, 2)
+                memory_results["gpu_vram_peak_gb"] = round(torch.cuda.max_memory_allocated() / 1e9, 2)
+            if _model is not None:
+                model_params_bytes = sum(p.numel() * p.element_size() for p in _model.parameters())
+                trainable_bytes = sum(p.numel() * p.element_size() for p in _model.parameters() if p.requires_grad)
+                memory_results["model_total_mb"] = round(model_params_bytes / 1e6, 1)
+                memory_results["model_trainable_mb"] = round(trainable_bytes / 1e6, 1)
+                memory_results["model_frozen_mb"] = round((model_params_bytes - trainable_bytes) / 1e6, 1)
+                memory_results["model_name"] = _model_id or "unknown"
+                memory_results["trainable_params"] = sum(p.numel() for p in _model.parameters() if p.requires_grad)
+                memory_results["total_params"] = sum(p.numel() for p in _model.parameters())
+                memory_results["optimizer_est_mb"] = round(trainable_bytes * 2 / 1e6, 1)
+                memory_results["total_training_est_mb"] = round(model_params_bytes / 1e6 + trainable_bytes * 2 / 1e6, 1)
+            results["memory"] = memory_results
+            _bench_results = results
+            _log("✓ Full benchmark suite complete")
+        except Exception as e:
+            _log(f"✗ Benchmark error: {e}")
+            _bench_results = {"_error": str(e)}
+        finally:
+            _bench_running = False
 
-                _model.model.eval()
-            except Exception as e:
-                training_results["error"] = str(e)
-        else:
-            training_results["error"] = "No model loaded — load a model to benchmark training"
+    threading.Thread(target=_run, daemon=True).start()
+    return {"status": "started"}
 
-        results["training"] = training_results
 
-        # ─── 5. Memory Usage (actual measurement) ────────────────────────────
-        _log("   [5/5] Memory profiling...")
-        mem = psutil.virtual_memory()
-        memory_results = {
-            "system_ram_total_gb": round(mem.total / 1e9, 1),
-            "system_ram_used_gb": round(mem.used / 1e9, 1),
-            "system_ram_available_gb": round(mem.available / 1e9, 1),
-            "system_ram_percent": mem.percent,
-        }
-
-        if device == "cuda":
-            memory_results["gpu_vram_total_gb"] = round(torch.cuda.get_device_properties(0).total_mem / 1e9, 1)
-            memory_results["gpu_vram_allocated_gb"] = round(torch.cuda.memory_allocated() / 1e9, 2)
-            memory_results["gpu_vram_reserved_gb"] = round(torch.cuda.memory_reserved() / 1e9, 2)
-            memory_results["gpu_vram_peak_gb"] = round(torch.cuda.max_memory_allocated() / 1e9, 2)
-
-        if _model is not None:
-            # Measure actual model memory footprint
-            model_params_bytes = sum(
-                p.numel() * p.element_size() for p in _model.parameters()
-            )
-            trainable_bytes = sum(
-                p.numel() * p.element_size() for p in _model.parameters() if p.requires_grad
-            )
-            frozen_bytes = model_params_bytes - trainable_bytes
-
-            memory_results["model_total_mb"] = round(model_params_bytes / 1e6, 1)
-            memory_results["model_trainable_mb"] = round(trainable_bytes / 1e6, 1)
-            memory_results["model_frozen_mb"] = round(frozen_bytes / 1e6, 1)
-            memory_results["model_name"] = _model_id or "unknown"
-            memory_results["trainable_params"] = sum(p.numel() for p in _model.parameters() if p.requires_grad)
-            memory_results["total_params"] = sum(p.numel() for p in _model.parameters())
-
-            # Estimate optimizer states (AdamW = 2x param size for momentum + variance)
-            optimizer_est_mb = trainable_bytes * 2 / 1e6
-            memory_results["optimizer_est_mb"] = round(optimizer_est_mb, 1)
-            memory_results["total_training_est_mb"] = round(
-                model_params_bytes / 1e6 + optimizer_est_mb, 1
-            )
-        else:
-            memory_results["model_loaded"] = False
-
-        results["memory"] = memory_results
-
-        _log(f"✓ Full benchmark suite complete")
-
-    except Exception as e:
-        _log(f"✗ Benchmark error: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(500, str(e))
-
-    return results
-
+@app.get("/api/bench/status")
+async def bench_status():
+    return {"running": _bench_running, "results": _bench_results}
 
 # ── CogMemBench ──────────────────────────────────────────────────────────────
 
@@ -772,7 +699,7 @@ _cogmem_results = None
 
 @app.post("/api/bench/cogmem")
 async def run_cogmembench(body: dict = {}):
-    """Run CogMemBench against the currently loaded model."""
+    """Run CogMemBench in background thread."""
     global _cogmem_running, _cogmem_results
     if _cogmem_running:
         raise HTTPException(409, "CogMemBench already running")
@@ -783,32 +710,35 @@ async def run_cogmembench(body: dict = {}):
     max_cases = int(body.get("max_cases", 100))
 
     _cogmem_running = True
+    _cogmem_results = None
     _log(f"🧠 Running CogMemBench ({per_axis}/axis, max {max_cases})...")
 
-    try:
-        sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "cogmembench"))
-        from cogmembench import CogMemRunner
+    def _run():
+        global _cogmem_running, _cogmem_results
+        try:
+            sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "cogmembench"))
+            from cogmembench import CogMemRunner
 
-        runner = CogMemRunner(per_axis=per_axis)
+            runner = CogMemRunner(per_axis=per_axis)
+            def model_fn(prompt):
+                return _model.generate(prompt, max_new_tokens=200)
 
-        def model_fn(prompt):
-            return _model.generate(prompt, max_new_tokens=200)
+            results = runner.run(model_fn=model_fn, max_cases=max_cases, verbose=False)
+            _cogmem_results = results
+            _log(f"✓ CogMemBench complete: Score={results['cogmem_score']}/100")
+        except Exception as e:
+            _log(f"✗ CogMemBench error: {e}")
+            _cogmem_results = {"_error": str(e)}
+        finally:
+            _cogmem_running = False
 
-        results = runner.run(model_fn=model_fn, max_cases=max_cases, verbose=False)
-        _cogmem_results = results
-        _log(f"✓ CogMemBench complete: Score={results['cogmem_score']}/100")
-        return results
-    except Exception as e:
-        _log(f"✗ CogMemBench error: {e}")
-        raise HTTPException(500, str(e))
-    finally:
-        _cogmem_running = False
+    threading.Thread(target=_run, daemon=True).start()
+    return {"status": "started"}
 
 
 @app.get("/api/bench/cogmem/status")
 async def cogmem_status():
     return {"running": _cogmem_running, "results": _cogmem_results}
-    return {"logs": list(_log_buffer)[-n:]}
 
 
 # ── Standard LLM Benchmarks (via lm-eval-harness) ────────────────────────────
@@ -961,14 +891,7 @@ _autochat_log = []
 
 @app.post("/api/arena/autochat")
 async def start_autochat(body: dict):
-    """Start an auto-chat session where the model converses with itself.
-
-    Body:
-        topic: str — starting topic/prompt
-        turns: int — number of back-and-forth turns (default 5)
-        system_a: str — system prompt for Model A (default: helpful assistant)
-        system_b: str — system prompt for Model B (default: curious human)
-    """
+    """Start auto-chat in background thread. Poll /api/arena/autochat/status for messages."""
     global _autochat_running, _autochat_log
     if _autochat_running:
         raise HTTPException(409, "Auto-chat already running")
@@ -981,68 +904,55 @@ async def start_autochat(body: dict):
     system_b = body.get("system_b", "You are a curious, intelligent human having a conversation. Ask follow-up questions and share your thoughts.")
 
     _autochat_running = True
-    _autochat_log = []
+    _autochat_log = [{"role": "Human", "content": topic, "turn": 0}]
     _log(f"🗣️ Auto-chat: '{topic[:50]}' ({turns} turns)")
 
-    try:
-        tokenizer = _model.tokenizer
-        model = _model.model
-        device = next(model.parameters()).device
+    def _run():
+        global _autochat_running, _autochat_log
+        try:
+            import torch
+            tokenizer = _model.tokenizer
+            model = _model.model
+            device = next(model.parameters()).device
 
-        conversation = []
-        # Seed the conversation
-        conversation.append({"role": "user", "content": topic})
-        _autochat_log.append({"role": "Human", "content": topic, "turn": 0})
+            conversation = [{"role": "user", "content": topic}]
 
-        for turn in range(turns):
-            # Model A responds (as assistant)
-            messages_a = [{"role": "system", "content": system_a}] + conversation
-            prompt_a = tokenizer.apply_chat_template(messages_a, tokenize=False, add_generation_prompt=True)
-            inputs_a = tokenizer(prompt_a, return_tensors="pt", truncation=True, max_length=1024).to(device)
-
-            with torch.no_grad():
-                out_a = model.generate(
-                    **inputs_a, max_new_tokens=200, do_sample=True,
-                    temperature=0.8, top_p=0.9, pad_token_id=tokenizer.pad_token_id
-                )
-            response_a = tokenizer.decode(out_a[0][inputs_a["input_ids"].shape[1]:], skip_special_tokens=True).strip()
-
-            conversation.append({"role": "assistant", "content": response_a})
-            _autochat_log.append({"role": "Model A", "content": response_a, "turn": turn + 1})
-            _log(f"   Turn {turn+1}A: {response_a[:60]}...")
-
-            if turn < turns - 1:
-                # Model B responds (as the curious human asking follow-ups)
-                messages_b = [{"role": "system", "content": system_b}]
-                # Flip roles for model B: assistant messages become user, user becomes assistant
-                for msg in conversation:
-                    if msg["role"] == "assistant":
-                        messages_b.append({"role": "user", "content": msg["content"]})
-                    elif msg["role"] == "user":
-                        messages_b.append({"role": "assistant", "content": msg["content"]})
-
-                prompt_b = tokenizer.apply_chat_template(messages_b, tokenize=False, add_generation_prompt=True)
-                inputs_b = tokenizer(prompt_b, return_tensors="pt", truncation=True, max_length=1024).to(device)
-
+            for turn in range(turns):
+                messages_a = [{"role": "system", "content": system_a}] + conversation
+                prompt_a = tokenizer.apply_chat_template(messages_a, tokenize=False, add_generation_prompt=True)
+                inputs_a = tokenizer(prompt_a, return_tensors="pt", truncation=True, max_length=1024).to(device)
                 with torch.no_grad():
-                    out_b = model.generate(
-                        **inputs_b, max_new_tokens=150, do_sample=True,
-                        temperature=0.9, top_p=0.9, pad_token_id=tokenizer.pad_token_id
-                    )
-                response_b = tokenizer.decode(out_b[0][inputs_b["input_ids"].shape[1]:], skip_special_tokens=True).strip()
+                    out_a = model.generate(**inputs_a, max_new_tokens=200, do_sample=True, temperature=0.8, top_p=0.9, pad_token_id=tokenizer.pad_token_id)
+                response_a = tokenizer.decode(out_a[0][inputs_a["input_ids"].shape[1]:], skip_special_tokens=True).strip()
+                conversation.append({"role": "assistant", "content": response_a})
+                _autochat_log.append({"role": "Model A", "content": response_a, "turn": turn + 1})
+                _log(f"   Turn {turn+1}A: {response_a[:60]}...")
 
-                conversation.append({"role": "user", "content": response_b})
-                _autochat_log.append({"role": "Model B", "content": response_b, "turn": turn + 1})
-                _log(f"   Turn {turn+1}B: {response_b[:60]}...")
+                if turn < turns - 1:
+                    messages_b = [{"role": "system", "content": system_b}]
+                    for msg in conversation:
+                        if msg["role"] == "assistant":
+                            messages_b.append({"role": "user", "content": msg["content"]})
+                        elif msg["role"] == "user":
+                            messages_b.append({"role": "assistant", "content": msg["content"]})
+                    prompt_b = tokenizer.apply_chat_template(messages_b, tokenize=False, add_generation_prompt=True)
+                    inputs_b = tokenizer(prompt_b, return_tensors="pt", truncation=True, max_length=1024).to(device)
+                    with torch.no_grad():
+                        out_b = model.generate(**inputs_b, max_new_tokens=150, do_sample=True, temperature=0.9, top_p=0.9, pad_token_id=tokenizer.pad_token_id)
+                    response_b = tokenizer.decode(out_b[0][inputs_b["input_ids"].shape[1]:], skip_special_tokens=True).strip()
+                    conversation.append({"role": "user", "content": response_b})
+                    _autochat_log.append({"role": "Model B", "content": response_b, "turn": turn + 1})
+                    _log(f"   Turn {turn+1}B: {response_b[:60]}...")
 
-        _log(f"✓ Auto-chat complete: {len(_autochat_log)} messages")
-        return {"messages": _autochat_log, "turns": turns, "topic": topic}
+            _log(f"✓ Auto-chat complete: {len(_autochat_log)} messages")
+        except Exception as e:
+            _log(f"✗ Auto-chat error: {e}")
+            _autochat_log.append({"role": "Error", "content": str(e), "turn": -1})
+        finally:
+            _autochat_running = False
 
-    except Exception as e:
-        _log(f"✗ Auto-chat error: {e}")
-        raise HTTPException(500, str(e))
-    finally:
-        _autochat_running = False
+    threading.Thread(target=_run, daemon=True).start()
+    return {"status": "started", "topic": topic, "turns": turns}
 
 
 @app.get("/api/arena/autochat/status")

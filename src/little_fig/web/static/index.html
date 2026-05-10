@@ -768,84 +768,68 @@ $('#train-btn').onclick=async()=>{
 
 // ── Benchmarks ───────────────────────────────────────────────────────────────
 async function runBench(){
-  $('#bench-btn').disabled=true;$('#bench-btn').textContent='⏳ Running…';
+  $('#bench-btn').disabled=true;$('#bench-btn').textContent='⏳ Starting…';
   $('#bench-progress').classList.remove('hidden');
-  $('#bench-progress-text').textContent='Running 5 benchmark suites... this may take 30-60 seconds';
+  $('#bench-progress-text').textContent='Starting benchmarks in background…';
   try{
     const r=await fetch('/api/bench/run',{method:'POST'});
-    const d=await r.json();
-    if(!r.ok)throw new Error(d.detail||'Benchmark failed');
-
-    // FigQuant
-    if(d.figquant){const q=d.figquant;$('#bench-quant').innerHTML=
-      `<div class="flex justify-between text-zinc-500"><span>Cosine Similarity</span><span class="text-cyan-400">${q.cosine_similarity}</span></div>
-       <div class="flex justify-between text-zinc-500"><span>MSE</span><span class="text-cyan-400">${q.mse}</span></div>
-       <div class="flex justify-between text-zinc-500"><span>SNR</span><span class="text-cyan-400">${q.snr_db} dB</span></div>
-       <div class="flex justify-between text-zinc-500"><span>Bits/param</span><span class="text-cyan-400">${q.bits_per_param}</span></div>
-       <div class="flex justify-between text-zinc-500"><span>Compression</span><span class="text-cyan-400">${q.compression_ratio}×</span></div>
-       <div class="w-full bg-zinc-800 rounded-full h-1.5 mt-2 light:bg-zinc-200"><div class="bg-cyan-500 h-1.5 rounded-full" style="width:${q.cosine_similarity*100}%"></div></div>`}
-
-    // FigKernels (all 4)
-    if(d.figkernel){const k=d.figkernel;$('#bench-kernel').innerHTML=
-      `<div class="flex justify-between text-zinc-500"><span>RMSNorm</span><span class="text-cyan-400">${k.rmsnorm_speedup}× faster</span></div>
-       <div class="flex justify-between text-zinc-600 text-[10px]"><span>  std: ${k.rmsnorm_standard_ms}ms → fig: ${k.rmsnorm_fig_ms}ms</span></div>
-       <div class="flex justify-between text-zinc-500 mt-1"><span>SwiGLU</span><span class="text-cyan-400">${k.swiglu_speedup}× faster</span></div>
-       <div class="flex justify-between text-zinc-600 text-[10px]"><span>  std: ${k.swiglu_standard_ms}ms → fig: ${k.swiglu_fig_ms}ms</span></div>
-       <div class="flex justify-between text-zinc-500 mt-1"><span>CrossEntropy</span><span class="text-cyan-400">${k.crossentropy_mem_savings}× less memory</span></div>
-       <div class="flex justify-between text-zinc-600 text-[10px]"><span>  ${k.crossentropy_std_mem_mb}MB → ${k.crossentropy_fig_mem_mb}MB | speed: ${k.crossentropy_speedup}×</span></div>
-       <div class="flex justify-between text-zinc-500 mt-1"><span>Fused Linear+LoRA</span><span class="text-cyan-400">${k.linear_lora_speedup}× faster</span></div>
-       <div class="flex justify-between text-zinc-600 text-[10px]"><span>  std: ${k.linear_lora_standard_ms}ms → fig: ${k.linear_lora_fig_ms}ms</span></div>`}
-
-    // Inference
-    if(d.inference){const i=d.inference;
-      if(i.error){$('#bench-inference').innerHTML=`<div class="text-amber-500 text-[11px]">⚠ ${i.error}</div>`}
-      else{$('#bench-inference').innerHTML=
-        `<div class="flex justify-between text-zinc-500"><span>Time to first token</span><span class="text-cyan-400">${i.ttft_ms}ms</span></div>
-         <div class="flex justify-between text-zinc-500"><span>Generate 32 tokens</span><span class="text-cyan-400">${i.gen_32_tok_per_sec} tok/s</span></div>
-         <div class="flex justify-between text-zinc-500"><span>Generate 64 tokens</span><span class="text-cyan-400">${i.gen_64_tok_per_sec} tok/s</span></div>
-         <div class="flex justify-between text-zinc-500"><span>Generate 128 tokens</span><span class="text-cyan-400">${i.gen_128_tok_per_sec} tok/s</span></div>`}}
-
-    // Training
-    if(d.training){const t=d.training;
-      if(t.error){$('#bench-training').innerHTML=`<div class="text-amber-500 text-[11px]">⚠ ${t.error}</div>`}
-      else{$('#bench-training').innerHTML=
-        `<div class="flex justify-between text-zinc-500"><span>Tokens/sec</span><span class="text-cyan-400">${t.tokens_per_sec}</span></div>
-         <div class="flex justify-between text-zinc-500"><span>Samples/sec</span><span class="text-cyan-400">${t.samples_per_sec}</span></div>
-         <div class="flex justify-between text-zinc-500"><span>Step time</span><span class="text-cyan-400">${t.step_time_ms}ms</span></div>
-         <div class="flex justify-between text-zinc-500"><span>Last loss</span><span class="text-cyan-400">${t.last_loss}</span></div>
-         <div class="flex justify-between text-zinc-600 text-[10px]"><span>${t.steps} steps in ${t.total_time_s}s</span></div>`}}
-
-    // Memory
-    if(d.memory){const m=d.memory;let html=
-      `<div class="grid grid-cols-2 gap-x-8 gap-y-1">
-         <div class="flex justify-between text-zinc-500"><span>System RAM</span><span class="text-cyan-400">${m.system_ram_used_gb}/${m.system_ram_total_gb} GB (${m.system_ram_percent}%)</span></div>
-         <div class="flex justify-between text-zinc-500"><span>RAM available</span><span class="text-cyan-400">${m.system_ram_available_gb} GB</span></div>`;
-      if(m.gpu_vram_total_gb){html+=
-        `<div class="flex justify-between text-zinc-500"><span>GPU VRAM total</span><span class="text-cyan-400">${m.gpu_vram_total_gb} GB</span></div>
-         <div class="flex justify-between text-zinc-500"><span>GPU VRAM allocated</span><span class="text-cyan-400">${m.gpu_vram_allocated_gb} GB</span></div>
-         <div class="flex justify-between text-zinc-500"><span>GPU VRAM peak</span><span class="text-cyan-400">${m.gpu_vram_peak_gb} GB</span></div>`}
-      if(m.model_total_mb){html+=
-        `<div class="flex justify-between text-zinc-500"><span>Model (${m.model_name})</span><span class="text-cyan-400">${m.model_total_mb} MB</span></div>
-         <div class="flex justify-between text-zinc-500"><span>├─ Trainable (LoRA)</span><span class="text-cyan-400">${m.model_trainable_mb} MB</span></div>
-         <div class="flex justify-between text-zinc-500"><span>├─ Frozen (INT4 base)</span><span class="text-cyan-400">${m.model_frozen_mb} MB</span></div>
-         <div class="flex justify-between text-zinc-500"><span>├─ Optimizer est.</span><span class="text-cyan-400">${m.optimizer_est_mb} MB</span></div>
-         <div class="flex justify-between text-zinc-500"><span>└─ Total training est.</span><span class="text-fig-400 font-bold">${m.total_training_est_mb} MB</span></div>`}
-      else{html+=`<div class="text-amber-500 col-span-2">No model loaded — load a model for detailed memory profile</div>`}
-      html+=`</div>`;$('#bench-memory').innerHTML=html}
-
-    $('#bench-btn').textContent='✓ Complete';
-    $('#bench-progress-text').textContent='✓ All benchmarks complete';
-    setTimeout(()=>{$('#bench-progress').classList.add('hidden')},3000);
+    if(!r.ok){const d=await r.json();throw new Error(d.detail||'Failed')}
+    $('#bench-btn').textContent='⏳ Running…';
+    // Poll for results
+    const poll=setInterval(async()=>{
+      try{
+        const s=await(await fetch('/api/bench/status')).json();
+        const d=s.results;
+        if(!d){return}
+        if(d._error){clearInterval(poll);$('#bench-progress-text').textContent='✗ '+d._error;$('#bench-btn').disabled=false;$('#bench-btn').textContent='▶ Run All';return}
+        // Render whatever we have so far
+        if(d.figquant){const q=d.figquant;$('#bench-quant').innerHTML=
+          `<div class="flex justify-between text-zinc-500"><span>Cosine Similarity</span><span class="text-cyan-400">${q.cosine_similarity}</span></div>
+           <div class="flex justify-between text-zinc-500"><span>MSE</span><span class="text-cyan-400">${q.mse}</span></div>
+           <div class="flex justify-between text-zinc-500"><span>SNR</span><span class="text-cyan-400">${q.snr_db} dB</span></div>
+           <div class="flex justify-between text-zinc-500"><span>Bits/param</span><span class="text-cyan-400">${q.bits_per_param}</span></div>
+           <div class="flex justify-between text-zinc-500"><span>Compression</span><span class="text-cyan-400">${q.compression_ratio}×</span></div>
+           <div class="w-full bg-zinc-800 rounded-full h-1.5 mt-2 light:bg-zinc-200"><div class="bg-cyan-500 h-1.5 rounded-full" style="width:${q.cosine_similarity*100}%"></div></div>`}
+        if(d.figkernel){const k=d.figkernel;$('#bench-kernel').innerHTML=
+          `<div class="flex justify-between text-zinc-500"><span>RMSNorm</span><span class="text-cyan-400">${k.rmsnorm_speedup}× faster</span></div>
+           <div class="flex justify-between text-zinc-600 text-[10px]"><span>  std: ${k.rmsnorm_standard_ms}ms → fig: ${k.rmsnorm_fig_ms}ms</span></div>
+           <div class="flex justify-between text-zinc-500 mt-1"><span>SwiGLU</span><span class="text-cyan-400">${k.swiglu_speedup}× faster</span></div>
+           <div class="flex justify-between text-zinc-600 text-[10px]"><span>  std: ${k.swiglu_standard_ms}ms → fig: ${k.swiglu_fig_ms}ms</span></div>
+           <div class="flex justify-between text-zinc-500 mt-1"><span>CrossEntropy</span><span class="text-cyan-400">${k.crossentropy_mem_savings}× less memory</span></div>
+           <div class="flex justify-between text-zinc-600 text-[10px]"><span>  ${k.crossentropy_std_mem_mb}MB → ${k.crossentropy_fig_mem_mb}MB | speed: ${k.crossentropy_speedup}×</span></div>
+           <div class="flex justify-between text-zinc-500 mt-1"><span>Fused Linear+LoRA</span><span class="text-cyan-400">${k.linear_lora_speedup}× faster</span></div>
+           <div class="flex justify-between text-zinc-600 text-[10px]"><span>  std: ${k.linear_lora_standard_ms}ms → fig: ${k.linear_lora_fig_ms}ms</span></div>`}
+        if(d.inference){const i=d.inference;if(i.error){$('#bench-inference').innerHTML=`<div class="text-amber-500 text-[11px]">⚠ ${i.error}</div>`}else{$('#bench-inference').innerHTML=
+          `<div class="flex justify-between text-zinc-500"><span>Time to first token</span><span class="text-cyan-400">${i.ttft_ms}ms</span></div>
+           <div class="flex justify-between text-zinc-500"><span>Generate 32 tokens</span><span class="text-cyan-400">${i.gen_32_tok_per_sec} tok/s</span></div>
+           <div class="flex justify-between text-zinc-500"><span>Generate 64 tokens</span><span class="text-cyan-400">${i.gen_64_tok_per_sec} tok/s</span></div>
+           <div class="flex justify-between text-zinc-500"><span>Generate 128 tokens</span><span class="text-cyan-400">${i.gen_128_tok_per_sec} tok/s</span></div>`}}
+        if(d.training){const t=d.training;if(t.error){$('#bench-training').innerHTML=`<div class="text-amber-500 text-[11px]">⚠ ${t.error}</div>`}else{$('#bench-training').innerHTML=
+          `<div class="flex justify-between text-zinc-500"><span>Tokens/sec</span><span class="text-cyan-400">${t.tokens_per_sec}</span></div>
+           <div class="flex justify-between text-zinc-500"><span>Samples/sec</span><span class="text-cyan-400">${t.samples_per_sec}</span></div>
+           <div class="flex justify-between text-zinc-500"><span>Step time</span><span class="text-cyan-400">${t.step_time_ms}ms</span></div>
+           <div class="flex justify-between text-zinc-500"><span>Last loss</span><span class="text-cyan-400">${t.last_loss}</span></div>`}}
+        if(d.memory){const m=d.memory;let html=`<div class="grid grid-cols-2 gap-x-8 gap-y-1"><div class="flex justify-between text-zinc-500"><span>System RAM</span><span class="text-cyan-400">${m.system_ram_used_gb}/${m.system_ram_total_gb} GB</span></div>`;
+          if(m.gpu_vram_total_gb)html+=`<div class="flex justify-between text-zinc-500"><span>GPU VRAM</span><span class="text-cyan-400">${m.gpu_vram_allocated_gb}/${m.gpu_vram_total_gb} GB</span></div>`;
+          if(m.model_total_mb)html+=`<div class="flex justify-between text-zinc-500"><span>Model</span><span class="text-cyan-400">${m.model_total_mb} MB</span></div><div class="flex justify-between text-zinc-500"><span>Training est.</span><span class="text-fig-400 font-bold">${m.total_training_est_mb} MB</span></div>`;
+          html+=`</div>`;$('#bench-memory').innerHTML=html}
+        // Check if done
+        if(!s.running){
+          clearInterval(poll);$('#bench-progress-text').textContent='✓ All benchmarks complete';
+          $('#bench-btn').textContent='✓ Complete';
+          setTimeout(()=>{$('#bench-btn').disabled=false;$('#bench-btn').textContent='▶ Run All';$('#bench-progress').classList.add('hidden')},3000);
+        }else{$('#bench-progress-text').textContent='Running… results streaming in'}
+      }catch(e){}
+    },2000);
   }catch(e){
-    $('#bench-btn').textContent='✗ Error';
     $('#bench-progress-text').textContent='✗ '+e.message;
+    $('#bench-btn').disabled=false;$('#bench-btn').textContent='▶ Run All';
   }
-  setTimeout(()=>{$('#bench-btn').disabled=false;$('#bench-btn').textContent='▶ Run All'},4000);
 }
 
 // ── Arena: Auto-Chat ────────────────────────────────────────────────────────
 async function startAutoChat(){
-  const btn=$('#ac-btn');btn.disabled=true;btn.textContent='⏳ Running…';
+  const btn=$('#ac-btn');btn.disabled=true;btn.textContent='⏳ Starting…';
   $('#ac-messages').innerHTML='';
   try{
     const r=await fetch('/api/arena/autochat',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -853,18 +837,24 @@ async function startAutoChat(){
         system_a:$('#ac-sys-a').value,system_b:$('#ac-sys-b').value})});
     const d=await r.json();
     if(!r.ok)throw new Error(d.detail||'Failed');
-    let html='';
-    d.messages.forEach(m=>{
-      const isA=m.role==='Model A';
-      const isHuman=m.role==='Human';
-      const color=isA?'text-fig-400':isHuman?'text-zinc-400':'text-amber-400';
-      const bg=isA?'border-fig-500/20':'border-amber-500/20';
-      html+=`<div class="card ${bg} py-2 px-3"><div class="flex items-center gap-2 mb-1"><span class="text-[10px] font-bold ${color}">${m.role}</span><span class="text-[9px] text-zinc-700">turn ${m.turn}</span></div><div class="text-xs text-zinc-300 leading-relaxed light:text-zinc-700">${esc(m.content)}</div></div>`;
-    });
-    $('#ac-messages').innerHTML=html;
-    btn.textContent='✓ Done';
-  }catch(e){$('#ac-messages').innerHTML=`<div class="text-red-400 text-xs">✗ ${e.message}</div>`;btn.textContent='✗ Error'}
-  setTimeout(()=>{btn.disabled=false;btn.textContent='▶ Start Auto-Chat'},3000);
+    btn.textContent='⏳ Running…';
+    // Poll for messages
+    const poll=setInterval(async()=>{
+      try{
+        const s=await(await fetch('/api/arena/autochat/status')).json();
+        let html='';
+        (s.messages||[]).forEach(m=>{
+          const isA=m.role==='Model A';const isHuman=m.role==='Human';
+          const color=isA?'text-fig-400':isHuman?'text-zinc-400':'text-amber-400';
+          const bg=isA?'border-fig-500/20':'border-amber-500/20';
+          html+=`<div class="card ${bg} py-2 px-3"><div class="flex items-center gap-2 mb-1"><span class="text-[10px] font-bold ${color}">${m.role}</span><span class="text-[9px] text-zinc-700">turn ${m.turn}</span></div><div class="text-xs text-zinc-300 leading-relaxed light:text-zinc-700">${esc(m.content)}</div></div>`;
+        });
+        $('#ac-messages').innerHTML=html;
+        $('#ac-messages').scrollTop=$('#ac-messages').scrollHeight;
+        if(!s.running){clearInterval(poll);btn.textContent='✓ Done';setTimeout(()=>{btn.disabled=false;btn.textContent='▶ Start Self-Talk'},3000)}
+      }catch(e){}
+    },2000);
+  }catch(e){$('#ac-messages').innerHTML=`<div class="text-red-400 text-xs">✗ ${e.message}</div>`;btn.disabled=false;btn.textContent='▶ Start Self-Talk'}
 }
 
 // ── Arena: Side-by-Side ─────────────────────────────────────────────────────
