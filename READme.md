@@ -185,7 +185,6 @@ src/little_fig/
 ## Research
 
 See [`paper/fig_engine.md`](paper/fig_engine.md) for the full technical paper.  
-See [`RESEARCH_PLAN.md`](RESEARCH_PLAN.md) for ongoing research directions.
 
 ---
 
