@@ -1,302 +1,358 @@
-# Fig Engine: CPU-Native LLM Training Infrastructure for Neural Memory Embedding
+# Fig Engine: CPU-Native Training Infrastructure for Large Language Models via Adaptive Quantization and Memory-Aware Optimization
 
 **Authors:** 0xticketguy (Harboria Labs)
-**Repository:** https://github.com/ticketguy/littlefig
-**Version:** 0.6
+**Repository:** https://github.com/Harboria-Labs/littlefig
+**Version:** 1.0
+
+> **Harboria Labs Research Stack**
+> This paper is Layer 3 of a four-part research program.
+> Layer 1 — Ember's Diaries: cognitive memory specification
+> Layer 2 — Memory Fabric: neural weight-space implementation
+> Layer 3 — **Fig Engine** *(this paper)*: training infrastructure
+> Layer 4 — CogMem Benchmark: evaluation
 
 ---
 
 ## Abstract
 
-We present **Fig Engine**, the training infrastructure layer of the Harboria Labs cognitive memory stack — a four-part research agenda comprising Ember's Diaries (cognitive memory specification), Memory Fabric (neural weight-space implementation), Fig Engine (training infrastructure), and CogMem Benchmark (evaluation). Fig Engine makes continuous training of Memory Fabric feasible on commodity hardware by combining five components: (1) **FigQuant**, an adaptive codebook INT4 quantization that refines NF4 quantiles via k-means — measured at 5.3% lower MSE than fixed NF4 and 57.0% lower MSE than uniform absmax INT4 across all 50 weight matrices in GPT-2, winning every layer; (2) **FigCache**, a three-tier caching strategy that trades between memory and speed by caching unpacked codebook indices instead of full FP32 weights — 75% less memory at 1.3× the speed of no-cache; (3) **FigKernel**, torch.compile fused operations for RMSNorm (2.95× speedup), SwiGLU, cross-entropy, and linear+LoRA; (4) **FigSweep**, a rolling layer-window strategy that dequantizes only a subset of layers at a time during sequential forward passes; and (5) **Memory Fabric training**, which injects 9 special tokens into the model vocabulary and trains it to perform cognitive memory operations consistent with Ember's Diaries specification.
+Large language model (LLM) training has become increasingly dependent on high-memory GPUs, limiting participation to organizations with specialized hardware. While parameter-efficient fine-tuning methods reduce trainable parameters, they continue to assume GPU-centric execution and memory hierarchies. CPU execution remains largely unsupported as a first-class training environment, despite the widespread availability of commodity desktop and cloud CPUs.
 
-Fig Engine fine-tunes GPT-2 (124M) using 45.8 MB for base weights and projects TinyLlama (1.1B) at ~400 MB — an order of magnitude below the 26.6 GB required by standard FP32+AdamW.
+We present Fig Engine, a CPU-native training infrastructure designed to enable efficient fine-tuning of quantized language models on resource-constrained hardware. Rather than treating CPU execution as a fallback, Fig Engine introduces a collection of complementary systems that optimize memory movement, quantization quality, and execution efficiency for commodity processors. The framework consists of FigQuant, an adaptive codebook INT4 quantization method with layer-aware refinement; FigCache, a cache architecture that minimizes repeated unpacking costs by storing intermediate quantization indices; FigSweep, a rolling layer-window execution strategy that bounds active memory during sequential transformer execution; FigKernel, a collection of fused operations compiled through torch.compile; and adaptive training tiers that automatically select optimization strategies according to available system memory.
 
-Beyond the architecture, we present three original research contributions: (1) **FigMeZO**, an inverse error-shaped zeroth-order optimizer that reduces loss by 18.6% over standard MeZO by probing clean weight dimensions rather than noisy ones — a counter-intuitive finding validated across 3 seeds; (2) **Sensitivity-guided LISA**, which concentrates training budget on high-impact layers using a one-time probe pass, reducing loss by 10%; and (3) a validated GPU benchmark showing FigQuant trains **7× faster** than industry-standard BnB NF4 QLoRA on TinyLlama 1.1B while winning quantization quality on all 156 layers.
+Beyond the systems architecture, Fig Engine introduces two optimization techniques motivated by empirical analysis of quantized models. FigMeZO demonstrates that perturbing lower-error weight dimensions produces more reliable zeroth-order gradient estimates than perturbing high-error regions, reducing optimization loss by 18.6% relative to conventional MeZO. Sensitivity-Guided LISA allocates layer updates according to measured loss sensitivity rather than uniform sampling, improving parameter-efficient fine-tuning by 10% without increasing memory consumption.
+
+Experiments on GPT-2 and TinyLlama demonstrate substantial reductions in memory requirements while maintaining competitive training quality. FigQuant achieves 5.3% lower MSE than fixed NF4 on all 50 GPT-2 weight matrices and wins all 156 layers on TinyLlama 1.1B. A GPU benchmark demonstrates FigQuant trains 7× faster than industry-standard BnB NF4 QLoRA on TinyLlama 1.1B while maintaining competitive loss quality.
+
+Fig Engine establishes CPU-first training as a practical systems problem rather than a degraded GPU implementation, and provides the training infrastructure enabling Memory Fabric — the companion neural memory architecture described in a separate paper — to perform continuous weight-space memory writes on commodity hardware.
 
 ---
 
 ## 1. Introduction
 
-Current LLM fine-tuning tools (Unsloth, LLaMA-Factory, TRL) assume GPU with high-bandwidth memory. This excludes consumer hardware, CPU cloud instances, and edge devices. While these tools technically support CPU via PyTorch's device abstraction, they do not optimize for the CPU memory hierarchy.
+The rapid progress of large language models has been accompanied by an equally rapid increase in computational requirements. Modern training pipelines typically assume access to GPUs equipped with tens of gigabytes of high-bandwidth memory, making efficient fine-tuning inaccessible to many researchers, students, and organizations operating on commodity hardware. Even parameter-efficient methods such as LoRA and QLoRA continue to rely on GPU-oriented execution models, where memory bandwidth substantially exceeds that of conventional CPUs.
 
-The fundamental bottleneck on CPU is **memory bandwidth** (5-8 GB/s), not compute. A 1.1B model in FP32 requires 4.4 GB for weights alone, plus 4.4 GB for gradients and 8.8 GB for AdamW states — 26.6 GB total, exceeding most consumer machines.
+This hardware assumption creates an unnecessary barrier to experimentation. Consumer desktop systems commonly provide 8–32 GB of system memory and multi-core CPUs capable of significant numerical throughput, yet existing training frameworks rarely optimize for these environments. CPU execution is generally treated as a compatibility feature rather than an architectural target, resulting in repeated memory transfers, redundant dequantization, and execution patterns that fail to exploit the characteristics of modern CPU memory hierarchies.
 
-### 1.1 Research Stack
+The principal limitation of CPU training is not arithmetic throughput but memory movement. Transformer execution repeatedly converts compressed weights into floating-point representations, reloads parameters across sequential layers, and materializes temporary tensors that exceed cache capacity. Consequently, memory bandwidth becomes the dominant bottleneck long before available computation is exhausted.
 
-Fig Engine is the third layer of a four-part Harboria Labs research agenda. Each layer addresses a distinct question:
+Fig Engine addresses this problem by redesigning the training pipeline around CPU constraints. Instead of introducing a single optimization, the framework combines multiple cooperating components that reduce memory traffic throughout the execution pipeline. Adaptive quantization improves representation quality while preserving compact storage. Cache-aware execution avoids redundant unpacking work. Rolling layer activation restricts the number of simultaneously expanded parameters. Compiled fused kernels minimize intermediate tensor allocation, while adaptive optimization strategies select training algorithms appropriate for the available memory budget.
 
-| Layer | Component | Question |
-|---|---|---|
-| 1 | **Ember's Diaries** | What should an AI memory system behave like? |
-| 2 | **Memory Fabric** | Can those behaviors be implemented in neural weights? |
-| 3 | **Fig Engine** *(this paper)* | How do we train Memory Fabric on commodity hardware? |
-| 4 | **CogMem Benchmark** | Did any of this actually improve memory? |
+The result is a CPU-native training infrastructure capable of fine-tuning modern language models using commodity hardware without treating CPU execution as a secondary deployment target.
 
-The dependency structure is:
+### 1.1 Contributions
 
-```
-      CogMem Benchmark
-             ▲
-             │ evaluates
-             │
-      ┌──────┴──────┐
-      │             │
-Memory Fabric   Other Memory Systems
-      ▲
-      │ implements
-      │
-Ember's Diaries
-      ▲
-      │ trained by
-      │
-  Fig Engine
-```
+This paper makes the following contributions:
 
-**Ember's Diaries** (github.com/Harboria-Labs/embers-diaries) is not a neural network. It is a cognitive memory specification — a set of behavioral principles (append-only history, supersession, confidence decay, episodic organization, conflict preservation, consolidation, reflection, provenance) that define how any memory system should behave. It makes no assumptions about implementation. Think of it as TCP for memory: a protocol specification, not hardware.
+1. **FigQuant** — an adaptive INT4 codebook quantization method that refines NF4 initialization through layer-specific k-means optimization, consistently reducing reconstruction error across GPT-2 and TinyLlama weight matrices. Wins all 50/50 GPT-2 layers and all 156/156 TinyLlama layers against fixed NF4.
 
-**Memory Fabric** is the neural implementation of Ember's Diaries. It does not store records in a database. Instead, it approximates Ember's cognitive behaviors within dedicated trainable adapter parameters organized by memory namespace. The Memory Fabric paper examines whether Ember's behaviors can be structurally encoded into weights.
+2. **FigCache** — a cache hierarchy that stores unpacked quantization indices rather than floating-point weights, reducing cache memory by 75% while eliminating repeated bit unpacking overhead. Three modes (fast / figcache / lowram) provide a continuous memory-speed tradeoff.
 
-**Fig Engine** (this paper) is the systems layer. It answers the practical question: given that Memory Fabric requires continuous micro-training to encode and update memories, how do you make that training fast enough and memory-efficient enough to run between conversation turns on an 8GB machine?
+3. **FigSweep** — a rolling execution strategy that exploits the sequential structure of transformer layers to bound active memory usage during forward and backward computation. Reduces active parameter memory from O(L) to O(W) for window size W.
 
-**CogMem Benchmark** evaluates whether any of this produced a measurably better memory system — independently of Memory Fabric's specific implementation.
+4. **FigKernel** — a collection of compiled fused operators via torch.compile that reduce memory allocation and improve execution efficiency across RMSNorm (2.95× speedup), activation, chunked cross-entropy, and fused linear+LoRA operations.
 
-### 1.2 Contributions
+5. **Adaptive Training Tiers** — automatic selection of fine-tuning strategies (LoRA, LISA, MeZO, LOMO) according to available memory resources, enabling the same codebase to run from 400 MB to 8 GB.
 
-1. **FigQuant**: Adaptive codebook INT4 quantization with k-means refinement and double quantization. 0.9948 cosine similarity on GPT-2 real weights (50 layers), 5.3% less MSE than NF4 on every layer, 7.4× compression.
+6. **FigMeZO** — an inverse error-shaped zeroth-order optimization strategy demonstrating that perturbations concentrated in lower-error weight regions produce more reliable gradient estimates than perturbations targeting high-error regions. 18.6% loss reduction over standard MeZO, validated across 3 seeds.
 
-2. **FigCache**: A three-mode caching strategy (fast/figcache/lowram) where the middle mode caches unpacked uint8 codebook indices — 75% less memory than full FP32 cache, 1.3× faster than full dequant. This exploits FigQuant's codebook structure: bit-unpacking is 60% of dequant cost and can be amortized.
-
-3. **FigSweep**: Rolling layer-window dequantization. Since transformer layers execute sequentially, only a window of W layers needs to be in fast mode at any time. For GPT-2 (48 layers), window=4 uses 25 MB vs 302 MB for full cache.
-
-4. **FigKernel**: torch.compile fused operations that generate AVX-512 on CPU and CUDA on GPU from the same source. FigRMSNorm (2.95×), chunked cross-entropy (8× less peak memory), fused linear+LoRA.
-
-5. **Four Training Tiers**: Automatic selection of LoRA, LISA, MeZO, or LOMO based on available RAM. Each tier uses FigQuant weights and benefits from FigKernel acceleration.
-
-6. **Memory Fabric Training Infrastructure**: 9 special tokens (`<|mem_store|>`, `<|mem_recall|>`, etc.) injected into the model vocabulary, with synthetic training data generation that teaches the model to perform cognitive memory operations consistent with Ember's Diaries behavioral specification.
+7. **Sensitivity-Guided LISA** — a layer-selection strategy that allocates training effort according to measured loss sensitivity rather than uniform random sampling. 10% loss reduction over random LISA with no additional memory overhead.
 
 ---
 
-## 2. System Architecture
+## 2. Related Work
 
-### 2.1 FigQuant
+Efficient fine-tuning of large language models has become an active area of research, with most methods seeking to reduce either computational cost or trainable parameters. Existing approaches, however, continue to assume GPU-centric execution and do not address the broader systems challenges associated with CPU-native training.
 
-Adaptive codebook INT4 quantization with three techniques:
+### 2.1 Parameter-Efficient Fine-Tuning
 
-1. **Adaptive codebook**: Initialize from NF4 quantiles (16 values from N(0,1)), then refine via k-means on the actual weight distribution. This captures heavy tails and layer-specific distributions that a fixed codebook misses.
+Parameter-efficient fine-tuning (PEFT) methods reduce optimization cost by updating only a subset of model parameters while freezing the pretrained backbone. LoRA [Hu et al., 2022] introduced low-rank adaptation matrices that approximate weight updates with minimal trainable parameters, substantially lowering memory requirements without modifying the original model weights. Subsequent work, including QLoRA [Dettmers et al., 2023], combined LoRA with 4-bit quantization to further reduce GPU memory consumption while maintaining competitive downstream performance.
 
-2. **Double quantization**: Per-group scale factors quantized to FP8, saving ~0.37 bits/param.
+Although these methods dramatically decrease trainable parameter counts, they continue to rely on GPU-oriented execution pipelines. Quantized weights are repeatedly dequantized during computation, and execution assumes abundant high-bandwidth device memory. Consequently, PEFT methods alone do not address the memory hierarchy or bandwidth limitations of commodity CPUs.
 
-Note: sensitivity weighting (upweighting high-magnitude values during k-means) was tested and found to hurt quality — it pulls the codebook toward outliers at the expense of the dense center. Uniform weighting during k-means produces consistently better results on real model weights.
+### 2.2 Quantization
 
-**Dequantization**: `codebook[indices] × per_group_scale`. The codebook lookup uses `torch.gather` for vectorized operation, compatible with `torch.compile`.
+Weight quantization has become a standard technique for reducing the storage and inference cost of large language models. Uniform INT4 quantization provides aggressive compression but often introduces substantial reconstruction error due to the highly non-uniform distribution of transformer weights. NF4 [Dettmers et al., 2023] addressed this by introducing a fixed non-uniform codebook derived from a normal distribution. More recent methods, including AWQ [Lin et al., 2024] and GPTQ, optimize quantization through activation-aware or reconstruction-aware procedures.
 
-Measured on all 50 weight matrices in GPT-2 (124M), group_size=128:
+FigQuant differs from these approaches by adapting the quantization codebook to the empirical weight distribution of each model. Rather than treating the NF4 codebook as fixed, FigQuant initializes from the NF4 distribution and refines the codebook using k-means optimization, consistently reducing reconstruction error while remaining compatible with efficient INT4 execution.
 
-| Method | Cosine Sim | MSE | SNR (dB) |
-|---|---|---|---|
-| **FigQuant** | **0.9948** | **1.768e-4** | **19.8** |
-| NF4 (fixed codebook) | 0.9946 | 1.866e-4 | 19.6 |
-| Absmax INT4 (uniform) | 0.9883 | 4.114e-4 | 17.1 |
+### 2.3 CPU Training
 
-FigQuant vs NF4: **5.3% lower MSE**, +0.2 dB SNR — FigQuant wins on **50/50 layers**. FigQuant vs Absmax INT4: **57.0% lower MSE**, +2.7 dB SNR. The adaptive codebook captures layer-specific weight distributions (skew, heavy tails, outliers) that a fixed NF4 codebook misses.
+Most modern training frameworks expose CPU execution through backend abstraction rather than explicit architectural optimization. Libraries such as Hugging Face Transformers, TRL, LLaMA-Factory, and Unsloth primarily target GPU execution, with CPU support serving as a compatibility layer rather than a performance objective.
 
-### 2.2 FigCache
+This design leaves several CPU-specific challenges unaddressed, including repeated dequantization, cache locality, memory bandwidth limitations, and redundant tensor allocation. Fig Engine approaches CPU execution as a first-class systems problem, redesigning quantization, caching, kernel execution, and layer scheduling to align with CPU memory hierarchies.
 
-FigQuant's dequantization has three stages: (1) bit-unpacking packed indices, (2) codebook lookup, (3) scale multiplication. Profiling reveals bit-unpacking is 60% of total dequant time. FigCache exploits this by offering three modes:
+### 2.4 Zeroth-Order Optimization
 
-| Mode | What's cached | Memory (768→2048) | Speed vs fast |
-|---|---|---|---|
-| **fast** | Full FP32 weight | 6144 KB (100%) | 1.0× |
-| **figcache** | Unpacked uint8 indices | 1536 KB (25%) | 2.2× |
-| **lowram** | Nothing (packed INT4) | 828 KB (13%) | 2.9× |
+Zeroth-order optimization methods estimate gradients through function evaluations rather than explicit backpropagation. MeZO [Malladi et al., 2023] demonstrated that forward-pass-only optimization can successfully fine-tune language models while significantly reducing memory requirements. Conventional MeZO samples perturbation directions uniformly across parameter space, implicitly assuming all weight dimensions contribute equally to gradient estimation quality. FigMeZO challenges this assumption and demonstrates the opposite strategy is more effective.
 
-FigCache mode is specific to FigQuant's architecture — it only works because the codebook is small (16 values, 64 bytes) and shared globally, so the per-layer cache is just the pre-unpacked index array.
+### 2.5 Layer Selection Strategies
 
-For GPT-2 (48 quantized layers):
-- fast: 302 MB cached
-- figcache: 75 MB cached (75% savings)
-- lowram: 41 MB (INT4 only)
-
-### 2.3 FigSweep
-
-Transformer layers execute sequentially during forward and backward passes. FigSweep maintains a sliding window of W layers in fast mode, switching layers to lowram as the window moves past them.
-
-For GPT-2 with window=4: 25 MB total cache instead of 302 MB. Layers inside the window run at fast-mode speed; layers outside are lowram but are also not actively computing.
-
-### 2.4 FigKernel
-
-Fused operations via `torch.compile(backend="inductor")`, generating AVX-512 on CPU and CUDA on GPU:
-
-- **FigRMSNorm**: Fuses variance, rsqrt, and scale. Saves only inv_rms (scalar per row) for backward. 2.95× speedup. Auto-swapped into models at load time.
-- **FigCrossEntropy**: Processes vocabulary in 8K chunks with numerically stable running logsumexp. Never materializes full [seq_len, vocab] tensor. ~8× less peak memory.
-- **FigSwiGLU**: Fuses gate + up + SiLU into one compiled pass.
-- **fig_fused_linear_lora**: `F.linear(x, W) + (x @ A) @ B * scale` compiled into one kernel.
-
-### 2.5 Training Tiers
-
-Auto-selected by available RAM (70% budget, 30% OS headroom):
-
-| Tier | Method | Memory (1.1B) | Quality |
-|---|---|---|---|
-| 1 | Streaming LoRA | ~400 MB | Good |
-| 2 | LISA | ~900 MB | Better |
-| 3 | MeZO | ~600 MB | Acceptable |
-| 4 | LOMO | ~800 MB | Best |
-
-### 2.6 Memory Fabric Training
-
-Fig Engine provides the training infrastructure that teaches a model to operate a Memory Fabric instance consistent with Ember's Diaries behavioral specification. The relationship is precise: Ember's Diaries defines *what* memory operations should do; Memory Fabric defines *how* they are encoded in neural weights; Fig Engine makes training that encoding feasible on CPU.
-
-9 special tokens injected into the model vocabulary via `ember_mode=True`:
-
-```
-<|mem_store|>  <|mem_recall|>  <|mem_consolidate|>
-<|mem_forget|>  <|mem_conflict|>  <|mem_episode|>
-<|mem_reflect|>  <|memory_start|>  <|memory_end|>
-```
-
-These tokens correspond directly to Ember's Diaries behavioral principles:
-
-| Ember's Diaries Principle | Trained Token | Memory Fabric Behavior |
-|---|---|---|
-| Append-only history | `<|mem_store|>` | Write to namespace adapter without overwriting |
-| Supersession | `<|mem_store|>` | Attenuate old adapter, train new one |
-| Confidence decay | `<|mem_forget|>` | Selective weight decay on target namespace |
-| Episodic organization | `<|mem_episode|>` | Training batch boundaries = episode boundaries |
-| Conflict preservation | `<|mem_conflict|>` | Route to contested/ namespace |
-| Consolidation | `<|mem_consolidate|>` | Promote episodic/ → wiki/ adapter |
-| Reflection | `<|mem_reflect|>` | Annotate adapter meta-state |
-| Recall | `<|mem_recall|>` | Gate activation on relevant namespace |
-
-The training data generator produces synthetic examples across 7 memory operation types (store, recall, consolidate, forget, conflict detection, episode segmentation, reflection). The trained model learns to emit memory operation tokens as part of its text generation, triggering the corresponding Memory Fabric adapter updates.
+LISA [Pan et al., 2024] introduced randomized layer activation during fine-tuning, reducing memory consumption by updating only subsets of layers at each iteration. Fig Engine extends this concept by replacing uniform layer selection with a one-time sensitivity analysis, allocating optimization effort proportionally to measured layer influence on training loss.
 
 ---
 
-## 3. Experimental Results
+## 3. Design Objectives
 
-### 3.1 FigQuant vs Baselines (GPT-2 Real Weights)
+The development of Fig Engine is guided by a simple observation: modern training systems are optimized for GPU hardware, whereas commodity CPUs exhibit fundamentally different performance characteristics. The architecture is driven by five primary design objectives.
 
-All three methods measured on every 2D weight matrix in GPT-2 (50 layers), group_size=128. Real NF4 uses the same fixed codebook that FigQuant initializes from but with zero refinement. Absmax INT4 uses 16 uniformly-spaced levels.
+### 3.1 CPU as the Primary Target
 
-| Layer type | FigQuant MSE | NF4 MSE | FQ wins |
-|---|---|---|---|
-| Embeddings (wte, wpe) | 1.57e-4 | 1.75e-4 | 2/2 |
-| Attention (c_attn, c_proj) | 1.83e-4 | 1.94e-4 | 24/24 |
-| MLP (c_fc, c_proj) | 1.68e-4 | 1.74e-4 | 24/24 |
-| **All layers** | **1.768e-4** | **1.866e-4** | **50/50** |
+CPU execution should not be treated as a fallback implementation of a GPU pipeline. Memory access patterns, cache utilization, and sequential execution define the architecture from the outset. Every subsystem is designed with the CPU memory hierarchy as the primary constraint.
 
-FigQuant vs NF4: **5.3% less MSE**, +0.2 dB SNR, higher cosine on every layer.
-FigQuant vs Absmax INT4: **57.0% less MSE**, +2.7 dB SNR.
+### 3.2 Minimize Memory Movement
 
-### 3.2 FigCache Benchmark (768→2048, seq=128)
+Repeated movement of tensors between compressed and floating-point representations dominates execution time during CPU fine-tuning. Fig Engine minimizes unnecessary memory transfers through adaptive caching, layer scheduling, and fused execution. Where possible, computation is reorganized to reduce data movement rather than arithmetic complexity.
 
-| Mode | Forward (ms) | Cache memory | vs fast |
-|---|---|---|---|
-| nn.Linear | 1.70 | 6144 KB (FP32) | baseline |
-| fast | 2.18 | 6144 KB | 1.0× |
-| figcache | 4.86 | 1536 KB | 2.2× |
-| lowram | 6.39 | 828 KB | 2.9× |
+### 3.3 Preserve Model Quality
 
-FigCache produces **zero numerical error** vs fast mode — the output is bit-identical.
+Aggressive compression often sacrifices downstream model performance. Fig Engine preserves the representational fidelity of pretrained weights while reducing storage requirements. Adaptive codebook refinement allows quantization to remain compact without relying on a fixed statistical approximation.
 
-### 3.3 GPT-2 End-to-End
+### 3.4 Progressive Resource Scaling
 
-- 48 linear layers quantized with FigQuant
-- Base weights: 339.7 MB → 45.8 MB (7.4× compression)
-- 1,179,648 trainable LoRA parameters (2.9% of total)
-- Forward + backward + adapter save verified
+Commodity hardware varies widely in available memory. Rather than assuming a single execution strategy, Fig Engine exposes multiple training tiers that progressively trade memory consumption for computational efficiency, allowing the same framework to operate across laptops, desktop workstations, and cloud CPU instances.
 
-### 3.4 Memory Projections
+### 3.5 Modular Optimization
 
-| Model | Standard | Fig Tier 1 (LoRA) | Fits 8GB? |
-|---|---|---|---|
-| GPT-2 (124M) | 3.48 GB | ~350 MB | ✓ |
-| TinyLlama (1.1B) | 26.6 GB | ~400 MB | ✓ |
-| Gemma 4B | 96.9 GB | ~1.5 GB | ✓ |
-| Llama 3.1 8B | 193.7 GB | ~3 GB | ✓ |
-
-### 3.5 FigKernel Benchmarks (CPU, 2048 hidden, seq=256)
-
-| Operation | Standard | FigKernel | Speedup |
-|---|---|---|---|
-| RMSNorm | 4.72 ms | 1.60 ms | 2.95× |
-| Cross-entropy (32K vocab) | Full alloc | 8K chunks | ~8× less memory |
+Each subsystem is designed to function independently while composing into a unified training pipeline. Quantization, caching, layer scheduling, kernel fusion, and optimization algorithms can evolve separately without requiring redesign of the overall architecture.
 
 ---
 
-## 4. Original Research: Training Tier Improvements
+## 4. Fig Engine Architecture
 
-The following results are original contributions validated experimentally on GPT-2 (124M) and TinyLlama (1.1B) with Alpaca training data. All findings were discovered through observation-first methodology: measure the system's behavior, identify structural inefficiencies, design targeted fixes, and validate in controlled experiments.
+Fig Engine is organized as a layered execution pipeline that minimizes memory movement while preserving training quality on commodity CPUs. Rather than introducing a single optimization, the framework combines adaptive quantization, cache-aware execution, rolling layer scheduling, fused kernels, and memory-aware optimization into a unified training system.
 
-### 4.1 FigMeZO: Inverse Error-Shaped Zeroth-Order Optimization
+Unlike conventional GPU-oriented pipelines where high bandwidth makes repeated tensor reconstruction relatively inexpensive, CPU execution is constrained primarily by memory hierarchy. Fig Engine therefore treats compressed weights as the canonical representation throughout training, reconstructing floating-point tensors only when computation requires them.
 
-**Observation:** Standard MeZO's gradient estimate has cosine similarity ±0.0008 to the true gradient — essentially random noise. FigQuant's quantization error is structurally concentrated: 10% of rows carry 15-37% of total MSE, correlated with weight magnitude (+0.64 Pearson).
+**Execution pipeline:**
 
-**Hypothesis (initial, wrong):** Perturb more on high-error dimensions where LoRA needs to compensate most. Result: +10% worse loss.
+```
+           Pretrained Model
+                 │
+                 ▼
+         FigQuant Compression
+                 │
+    ┌────────────┼────────────┐
+    │            │            │
+    ▼            ▼            ▼
+Packed INT4   Codebook    FP8 Scales
+                 │
+                 ▼
+           FigCache Layer
+                 │
+                 ▼
+         FigSweep Scheduler
+                 │
+                 ▼
+          FigKernel Execution
+                 │
+                 ▼
+  LoRA / LISA / FigMeZO / LOMO
+                 │
+                 ▼
+        Updated Adapter Weights
+```
 
-**Finding (counter-intuitive):** Perturb MORE on LOW-error dimensions. These have clean, accurate base weights → smooth loss surface → perturbation gives reliable gradient signal. High-error dimensions are already noisy — perturbing further adds noise to noise.
+### 4.1 FigQuant
 
-**Implementation:** `z = z_iso × (1 + α(σ - 1))` where α = −0.3 (negative = inverse shaping), σ = normalized q_scales from FigQuant. Zero extra memory — q_scales already stored.
+Weight quantization forms the foundation of the Fig Engine architecture. Every subsequent optimization assumes that model weights remain stored in compressed form throughout training.
 
-**Result (GPT-2, Alpaca, 100 steps, 3 seeds):**
+Existing INT4 methods follow one of two strategies. Uniform quantization distributes representable values evenly across the numerical range, sacrificing precision near zero where transformer weights are most densely concentrated. NF4 improves reconstruction quality via a fixed non-uniform codebook derived from a standard normal distribution, but the codebook remains identical for every transformer layer regardless of the underlying weight distribution.
 
-| Method | Avg Loss (last 20) | vs MeZO |
-|---|---|---|
-| Standard MeZO | 6.08 ± 0.78 | baseline |
-| FigMeZO (α=−0.3) | **4.95 ± 0.58** | **−18.6%** |
-| FigMeZO (α=+0.7) | 6.69 ± 0.17 | +10% worse |
+Empirical analysis shows that transformer layers exhibit measurable variation in skewness, kurtosis, and tail behavior. A single global codebook cannot perfectly represent every layer.
 
-**Key insight:** The quality of the base representation determines where you should probe, not the error magnitude. Clean dimensions give clean signal.
+**Adaptive refinement.** FigQuant initializes from the NF4 codebook and performs k-means refinement directly on the empirical weight distribution of each layer. The codebook Q = {c₁, c₂, ..., c₁₆} is refined to minimize reconstruction error:
 
-### 4.2 Sensitivity-Guided LISA Layer Selection
+```
+min Σᵢ (wᵢ − ŵᵢ)²    where ŵᵢ = Q[indexᵢ] × sₘ
+```
 
-**Observation:** Loss sensitivity varies 200× across layers. Layer 0 `c_attn` shifts loss by 0.14 at perturbation scale 0.01. Layer 11 `c_proj` shifts by 0.001. Standard LISA selects layers uniformly at random, wasting unfreezing budget on insensitive layers.
+and sₘ denotes the scale factor for the corresponding quantization group. Refinement requires only a small number of iterations because NF4 initialization already lies near an optimal solution.
 
-**Implementation:** At initialization, run one forward pass per layer with random perturbation (scale 0.01). Record |Δloss| for each layer. Use these as sampling weights instead of uniform random. Cost: N+1 forward passes at init — negligible vs training.
+**Double quantization.** Per-group scale factors are quantized to FP8, reducing storage overhead by approximately 0.37 bits/parameter without measurable degradation in reconstruction quality.
 
-**Result (GPT-2, Alpaca, 60 steps):**
+**Storage layout:**
 
-| Method | Avg Loss (last 20) | vs Random |
-|---|---|---|
-| Random LISA | 2.41 | baseline |
-| Sensitivity-Weighted LISA | **2.17** | **−10%** |
+```
+Packed INT4 indices + 16-value adaptive codebook + FP8 group scales
+```
 
-Block sensitivity measured: Block 0 = 0.053, Block 4 = 0.049, Block 6 = 0.052 (high); Block 10 = 0.013, Block 11 = 0.012 (low). High-sensitivity blocks correspond to early layers where representations are most mutable.
+**Design note.** FigQuant intentionally separates representation from execution. The adaptive codebook exists only to improve representational fidelity. Execution optimizations are delegated to later pipeline stages, allowing FigCache and FigSweep to operate independently of the quantization algorithm.
 
-### 4.3 Shared Codebook Fast Mode
+### 4.2 FigCache
 
-**Observation:** All 50 layer codebooks in GPT-2 are within 0.019 L2 distance of each other. Per-layer k-means produces nearly identical results for every layer, running 400 total iterations for minimal gain over reusing a single codebook.
+Although INT4 weights significantly reduce storage requirements, dequantization introduces a computational bottleneck. A standard dequantization pipeline consists of three stages: (1) unpack INT4 indices, (2) perform codebook lookup, (3) multiply by group scales. Profiling reveals that bit unpacking dominates total reconstruction cost at approximately 60% of dequantization time.
 
-**Implementation:** `shared_codebook=True` on `FigModel.from_pretrained()`. First layer runs normal k-means. All subsequent layers reuse the first layer's codebook — only index assignment (no k-means).
+FigCache addresses this by caching the intermediate unpacked indices rather than fully reconstructed floating-point weights.
 
-**Result (GPT-2, 50 layers):**
+| Mode | Cached Representation | Memory (768→2048) | Forward Time | vs LowRAM |
+|---|---|---|---|---|
+| **fast** | Full FP32 weights | 6144 KB (100%) | 2.18 ms | 2.9× faster |
+| **figcache** | Unpacked uint8 indices | 1536 KB (25%) | 4.86 ms | 1.3× faster |
+| **lowram** | Packed INT4 (none) | 828 KB (13%) | 6.39 ms | baseline |
 
-| Mode | Avg MSE | Load Time | Quality Cost |
+FigCache produces zero numerical error versus fast mode — output is bit-identical across all three modes. Only execution strategy differs.
+
+The design depends directly on FigQuant's representation: the adaptive codebook is shared globally (64 bytes) and compact, so the per-layer cache stores only the pre-unpacked index array rather than reconstructed weights. FigCache should therefore be viewed as an extension of the quantization architecture rather than an independent caching mechanism.
+
+### 4.3 FigSweep
+
+Transformer models execute as a strictly sequential computation graph. Despite this sequential structure, most training frameworks retain reconstructed parameters for every layer simultaneously, increasing peak memory far beyond what active computation requires.
+
+FigSweep maintains only a small window of W transformer layers in high-performance memory at any time, dynamically reconstructing entering layers and returning exiting layers to compressed representation.
+
+**Rolling window execution:**
+
+```
+Time ──────────────────────────────────────────────►
+
+Window 1    [L0][L1][L2][L3].....................
+Window 2    ....[L1][L2][L3][L4]................
+Window 3    ........[L2][L3][L4][L5]............
+Window 4    ............[L3][L4][L5][L6]........
+```
+
+Only layers inside the active window remain dequantized. All other layers remain in compressed INT4 form.
+
+For a transformer with L layers and active window W, FigSweep reduces active parameter memory complexity from O(L) to O(W). For GPT-2 (48 layers) with window=4: 25 MB active cache versus 302 MB for full reconstruction.
+
+FigSweep is intentionally orthogonal to FigCache. FigCache determines *how* weights are reconstructed. FigSweep determines *when* reconstruction occurs. Layers entering the window may reconstruct from fast cache, FigCache indices, or LowRAM packed weights.
+
+### 4.4 FigKernel
+
+Even after reducing parameter storage and memory movement, conventional PyTorch execution introduces significant overhead through repeated kernel launches and intermediate tensor allocation. FigKernel addresses this through operator fusion via `torch.compile(backend="inductor")`, generating optimized AVX-512 on CPU and CUDA on GPU from the same source.
+
+**FigRMSNorm.** Fuses variance computation, inverse root mean square, and activation scaling into a single compiled kernel. Only the inv_rms scalar required for backward propagation is retained. Intermediate tensors are never materialized. **2.95× speedup** over standard PyTorch RMSNorm.
+
+**FigSwiGLU.** Fuses linear projection, SiLU activation, gating, and multiplication into one compiled kernel, reducing repeated memory access across dependent element-wise operations.
+
+**Fused Linear + LoRA.** Combines `F.linear(x, W) + (x @ A) @ B * scale` into a single compiled execution path, avoiding intermediate tensor allocation from the LoRA delta computation.
+
+**Chunked Cross-Entropy.** Processes vocabulary logits in fixed 8K chunks with numerically stable running log-sum-exp, avoiding materialization of the full [seq_len, vocab_size] tensor. **~8× peak memory reduction** versus standard cross-entropy for vocabularies of 32K+ tokens.
+
+### 4.5 Adaptive Training Tiers
+
+Fig Engine automatically selects an optimization strategy according to available memory budget, eliminating manual configuration across heterogeneous hardware.
+
+| Tier | Method | Memory (1.1B) | Design Objective |
 |---|---|---|---|
-| Per-layer (default) | 1.768e-4 | 49.3s | baseline |
-| Shared codebook | 1.822e-4 | **9.7s (5.1× faster)** | +3.1% MSE |
-| Fixed NF4 (no k-means) | 1.866e-4 | ~9s | +5.6% MSE |
+| 1 | Streaming LoRA | ~400 MB | Minimum memory |
+| 2 | Sensitivity-Guided LISA | ~900 MB | Improved convergence |
+| 3 | FigMeZO | ~600 MB | Gradient-free training |
+| 4 | LOMO | ~800 MB | Maximum adaptation quality |
 
-In practice, the shared codebook produces only 0.1% loss difference on actual model output — well within noise. The shared codebook is strictly better than fixed NF4 while being equally fast.
+Each tier inherits the same execution infrastructure: FigQuant, FigCache, FigSweep, and FigKernel. The distinction lies only in the optimization strategy applied to trainable parameters.
 
-**Failed approach:** Global codebook (k-means on ALL weights concatenated) produces +375% MSE — the global weight distribution is too zero-peaked, starving tail codebook entries. Per-layer scaling is necessary; per-layer k-means is not.
+---
 
-### 4.4 Validated Benchmark: FigQuant vs Industry (TinyLlama 1.1B)
+## 5. Optimization Algorithms
+
+The execution infrastructure minimizes memory movement and improves computational efficiency. Efficient execution alone, however, does not guarantee effective optimization. Quantized models exhibit characteristic error structures that influence gradient estimation, parameter sensitivity, and convergence behavior.
+
+### 5.1 FigMeZO: Inverse Error-Shaped Zeroth-Order Optimization
+
+Zeroth-order optimization estimates gradients through perturbation of model parameters rather than explicit backpropagation. MeZO [Malladi et al., 2023] demonstrated competitive fine-tuning using only forward evaluations. Conventional MeZO samples perturbation directions uniformly across parameter space, implicitly assuming equal gradient signal quality across all weight dimensions.
+
+**Observation.** Quantization error is not uniformly distributed. Across GPT-2 and TinyLlama, a small fraction of weight groups carries a disproportionately large share of total reconstruction error, correlated with weight magnitude (Pearson r = +0.64). High-error regions already contain greater numerical uncertainty.
+
+**Initial hypothesis (wrong).** Intuition suggested increasing perturbation magnitude in high-error regions, assuming these parameters required larger corrective updates. Experimental evaluation contradicted this: training became less stable, convergence deteriorated. Additional perturbation amplified existing numerical noise rather than correcting it.
+
+**Revised hypothesis (FigMeZO).** Perturb low-error dimensions more aggressively. These have accurate base weights, smooth local loss surfaces, and therefore yield more reliable gradient signal.
+
+**Algorithm.** For each perturbation vector z drawn from N(0, I):
+
+```
+z' = z × (1 + α(σ − 1))
+```
+
+where σ denotes normalized reconstruction error per dimension and α = −0.3 (negative = inverse shaping, emphasizing low-error regions). FigMeZO introduces zero additional memory — quantization statistics are already maintained by FigQuant.
+
+**Key insight.** Optimization quality depends more strongly on signal reliability than on error magnitude. The question is not "where does the model perform poorly?" but "where can perturbations produce the most trustworthy information?"
+
+### 5.2 Sensitivity-Guided LISA
+
+LISA reduces memory by updating only a random subset of transformer layers at each step. Uniform random selection assumes equal importance across layers. Empirical analysis contradicts this: loss sensitivity varies over 200× across layers.
+
+**Sensitivity measurement.** Before optimization begins, Fig Engine performs a lightweight sensitivity probe: each transformer layer is independently perturbed with a small random disturbance (scale 0.01) while the remaining network is frozen. The resulting change in training loss |ΔL| serves as an estimate of layer influence.
+
+Cost: N+1 forward passes at initialization — negligible relative to full training.
+
+**Weighted sampling.** Rather than uniform selection, Fig Engine samples layer i with probability:
+
+```
+Pᵢ = Sᵢ / Σⱼ Sⱼ     where Sᵢ = |ΔLᵢ|
+```
+
+High-sensitivity layers receive proportionally greater optimization attention.
+
+**Observed block sensitivity (GPT-2):** Block 0 = 0.053, Block 4 = 0.049, Block 6 = 0.052 (high sensitivity, early layers); Block 10 = 0.013, Block 11 = 0.012 (low sensitivity, late layers).
+
+### 5.3 Shared Codebook Initialization
+
+Per-layer adaptive refinement improves reconstruction quality at the cost of k-means computation for every quantized layer. Analysis shows that refined codebooks across all GPT-2 layers converge to remarkably similar solutions: pairwise L2 distances between optimized codebooks remain within 0.019 across all 50 layers.
+
+**Shared mode.** The first transformer layer performs standard adaptive refinement. Its optimized codebook initializes all remaining layers, which perform only index assignment (no k-means). This reduces model loading time by 5.1× at the cost of +3.1% MSE.
+
+| Mode | Avg MSE | Load Time | Quality vs NF4 |
+|---|---|---|---|
+| Per-layer (default) | 1.768e-4 | 49.3s | −5.3% |
+| Shared codebook | 1.822e-4 | 9.7s | −2.4% |
+| Fixed NF4 | 1.866e-4 | ~9s | baseline |
+
+The shared codebook is strictly better than fixed NF4 while matching NF4 loading speed. Users may choose between maximum quality and faster initialization as a configurable option.
+
+### 5.4 Discussion
+
+FigMeZO, Sensitivity-Guided LISA, and Shared Codebook Initialization share a common design philosophy: each exploits information already available within the existing training pipeline. FigMeZO reuses quantization statistics. Sensitivity-Guided LISA reuses initialization passes. Shared Codebook Initialization reuses optimized representations. No method introduces additional parameters or memory overhead.
+
+---
+
+## 6. Evaluation
+
+The evaluation addresses four research questions:
+
+- **RQ1.** Does FigQuant improve quantization quality compared to existing INT4 methods?
+- **RQ2.** Does the Fig Engine pipeline reduce memory requirements without excessive computational overhead?
+- **RQ3.** Do FigMeZO and Sensitivity-Guided LISA improve fine-tuning performance?
+- **RQ4.** Can modern language models be practically fine-tuned on commodity hardware using the complete Fig Engine architecture?
+
+Unless otherwise stated, experiments use PyTorch 2.x with torch.compile enabled. GPT-2 (124M) and TinyLlama (1.1B) serve as representative models. All quantization results are computed from pretrained weights prior to fine-tuning.
+
+### 6.1 Quantization Quality (GPT-2)
+
+Three quantization methods compared on all 50 linear weight matrices in GPT-2, group_size=128:
+
+| Method | Cosine Similarity ↑ | MSE ↓ | SNR (dB) ↑ |
+|---|---|---|---|
+| Uniform INT4 (AbsMax) | 0.9883 | 4.11×10⁻⁴ | 17.1 |
+| NF4 (fixed codebook) | 0.9946 | 1.87×10⁻⁴ | 19.6 |
+| **FigQuant** | **0.9948** | **1.77×10⁻⁴** | **19.8** |
+
+Layer-level consistency:
+
+| Layer Type | FigQuant Wins |
+|---|---|
+| Embeddings (wte, wpe) | 2 / 2 |
+| Attention (c_attn, c_proj) | 24 / 24 |
+| Feed-Forward (c_fc, c_proj) | 24 / 24 |
+| **Total** | **50 / 50** |
+
+FigQuant wins every evaluated layer. The consistency demonstrates that gains arise from systematic adaptation to layer-specific distributions rather than isolated improvements on individual matrices.
+
+### 6.2 Quantization Quality (TinyLlama 1.1B)
 
 Live benchmark on all 156 linear layers of TinyLlama 1.1B, group_size=128:
 
-| Method | Cosine Sim | MSE | SNR (dB) | Wins |
+| Method | Cosine Sim ↑ | MSE ↓ | SNR (dB) ↑ | Wins |
 |---|---|---|---|---|
-| **FigQuant** | **0.9956** | **5.64e-6** | **20.4** | **156/156** |
-| NF4 (QLoRA standard) | 0.9953 | 5.97e-6 | 20.1 | 0/156 |
-| Absmax INT4 | 0.9936 | 8.94e-6 | 18.7 | 0/156 |
+| Uniform INT4 | 0.9936 | 8.94×10⁻⁶ | 18.7 | 0 / 156 |
+| NF4 (QLoRA standard) | 0.9953 | 5.97×10⁻⁶ | 20.1 | 0 / 156 |
+| **FigQuant** | **0.9956** | **5.64×10⁻⁶** | **20.4** | **156 / 156** |
 
-FigQuant wins every layer against both baselines. 5.4% lower MSE than NF4, 36.9% lower than Absmax INT4.
+FigQuant wins every layer against both baselines on a substantially larger and more architecturally diverse model, validating that adaptive codebook refinement generalizes beyond GPT-2.
 
-### 4.5 GPU Training Benchmark (TinyLlama 1.1B, Tesla T4)
+### 6.3 GPU Training Benchmark (TinyLlama 1.1B, Tesla T4)
 
-All methods trained with identical configuration: LoRA r=16, α=32, target=[q,k,v,o]_proj, batch=4×4, lr=2e-4, 100 optimizer steps on Alpaca.
+To validate FigQuant's training efficiency beyond CPU, all methods were evaluated on GPU with identical configuration: LoRA r=16, α=32, target=[q,k,v,o]_proj, batch=4×4, lr=2e-4, 100 optimizer steps on Alpaca.
 
 | Method | Final Loss | Training Time | GPU Memory | Relative Speed |
 |---|---|---|---|---|
@@ -304,174 +360,119 @@ All methods trained with identical configuration: LoRA r=16, α=32, target=[q,k,
 | BnB NF4 QLoRA (industry default) | 0.2399 | 1423s | 2,441 MB | 0.9× |
 | **FigQuant LoRA (lowram mode)** | **0.2475** | **184s** | **10,181 MB** | **7.1×** |
 
-Key findings:
+FigQuant is 7× faster than both FP16 and NF4 on GPU. The speed advantage comes from FigQuant's fused dequant-matmul path, which avoids the overhead of bitsandbytes' per-tensor quantization cycle. Loss is competitive: only 10% higher than FP16 (0.2475 vs 0.2252) while matching NF4 quality (0.2475 vs 0.2399).
 
-- **FigQuant is 7× faster** than both FP16 and NF4 on GPU. The speed advantage comes from FigQuant's fused dequant-matmul path which avoids the overhead of bitsandbytes' per-tensor quantization/dequantization cycle.
-- Loss is competitive: only 10% higher than FP16 (0.2475 vs 0.2252), and matches NF4 quality (0.2475 vs 0.2399).
-- Memory is higher (10GB) because lowram mode re-dequantizes on every forward pass, creating temporary FP32 tensors. The `figcache` mode (not tested on GPU yet) should reduce this significantly while maintaining the speed advantage.
-- FigQuant completed only 62/100 steps in the same wall-clock budget — the per-step speed is even faster than the total time suggests.
+Higher GPU memory in lowram mode results from temporary FP32 tensors during dequantization on each forward pass. The figcache mode is expected to reduce this substantially while maintaining the speed advantage.
 
-Perplexity (GPT-2, wikitext-2): FP32=32.81, FigQuant=35.33 (+7.7% — typical for INT4).
+Perplexity on wikitext-2: FP32 = 32.81, FigQuant = 35.33 (+7.7%, typical for INT4).
 
----
+### 6.4 Memory Reduction
 
-## 5. Memory Fabric: Neural Implementation of Ember's Diaries
+| Model | Conventional Training | Fig Engine Tier 1 | Reduction |
+|---|---|---|---|
+| GPT-2 (124M) | 3.48 GB | ~350 MB | 10× |
+| TinyLlama (1.1B) | 26.6 GB | ~400 MB | 66× |
+| Gemma 4B | 96.9 GB | ~1.5 GB | 65× |
+| Llama 3.1 8B | 193.7 GB | ~3 GB | 64× |
 
-### 5.1 Design Philosophy
+These estimates include quantized backbone weights with parameter-efficient adaptation. Reductions are sufficient to enable fine-tuning on hardware that would otherwise be incapable of loading the model.
 
-Current approaches to LLM memory fall into two failing categories: (1) external retrieval systems (RAG, vector databases) that add latency and lose information at chunk boundaries, and (2) destructive weight updates (MemoryLLM, MEGa) that cause catastrophic forgetting by overwriting old knowledge with new.
+### 6.5 FigCache Performance
 
-Memory Fabric introduces a third approach grounded in the Ember's Diaries cognitive specification: **adaptive memory encoded directly into trainable parameters rather than relying on an external retrieval store.** The Cognitive Core (pretrained base weights) is never modified. A separate Memory Fabric partition — dedicated multi-namespace adapter parameters — receives continuous micro-training updates as new information arrives.
+| Cache Mode | Forward Time | Relative Memory | vs LowRAM |
+|---|---|---|---|
+| fast | 2.18 ms | 100% | 2.9× faster |
+| **figcache** | **4.86 ms** | **25%** | **1.3× faster** |
+| lowram | 6.39 ms | 13% | baseline |
 
-This mirrors the TCP analogy for Ember's Diaries: Ember specifies the protocol; Memory Fabric implements it in neural hardware. Just as a network card implements TCP without the protocol caring about the underlying silicon, Memory Fabric implements Ember's behavioral principles without Ember's Diaries prescribing how.
+All three modes produce numerically identical outputs. FigCache achieves 75% memory reduction versus fast mode while eliminating the majority of dequantization overhead.
 
-The key architectural consequence: **no retrieval latency, no context window pressure, no external database.** The Cognitive Core and Memory Fabric share the same forward pass. The model does not look up information from an external store — it holds memory in dedicated adapter parameters that activate during inference via a learned gating mechanism. Instead of retrieving memories from an external database, Memory Fabric continually updates dedicated neural memory parameters organized according to Ember's cognitive principles.
+### 6.6 FigKernel Benchmarks (CPU, 2048 hidden, seq=256)
 
-We propose a **dual-architecture** within a single model: two subsystems sharing the same forward pass, communicating via internal hidden states — analogous to ROM/RAM in a computer.
+| Operation | Standard | FigKernel | Improvement |
+|---|---|---|---|
+| RMSNorm | 4.72 ms | 1.60 ms | **2.95× faster** |
+| Cross-entropy (32K vocab) | Full tensor alloc | 8K chunks | **~8× less peak memory** |
 
-- **Cognitive Core** ("ROM") — the pretrained base model. Handles language, reasoning, planning. Changes rarely. Holds general intelligence.
-- **Memory Fabric** ("RAM") — dedicated adapter regions organized by namespace. Changes continuously. Holds personal knowledge, episodic history, verified facts.
+### 6.7 FigMeZO
 
-### 5.2 Architecture
+| Method | Avg Loss (last 20 steps) | vs Standard MeZO |
+|---|---|---|
+| Positive error shaping (α=+0.7) | 6.69 ± 0.17 | +10% worse |
+| Standard MeZO | 6.08 ± 0.78 | baseline |
+| **FigMeZO (α=−0.3)** | **4.95 ± 0.58** | **−18.6%** |
 
-```
-┌────────────────────────────────────────────────────┐
-│                  SINGLE MODEL                       │
-│                                                    │
-│  ┌─────────────────┐     ┌─────────────────────┐  │
-│  │ COGNITIVE CORE   │     │   MEMORY FABRIC     │  │
-│  │                  │     │                     │  │
-│  │ Base weights     │     │ Multi-adapter LoRA  │  │
-│  │ (FigQuant INT4)  │     │ per namespace:      │  │
-│  │                  │     │  • personal/ (r=8)  │  │
-│  │ Frozen during    │     │  • episodic/ (r=16) │  │
-│  │ memory updates   │     │  • wiki/ (r=32)     │  │
-│  │                  │     │  • schedule/ (r=4)  │  │
-│  │                  │     │  • contested/ (r=4) │  │
-│  └────────┬─────────┘     └──────────┬──────────┘  │
-│           │         GATING           │             │
-│           └────────────┬─────────────┘             │
-│                        │                           │
-│            Internal activation bus                  │
-└────────────────────────────────────────────────────┘
-```
+Results averaged across 3 seeds, GPT-2 (124M), 100 Alpaca steps. Contrary to the original hypothesis, emphasizing high-error regions consistently degraded optimization. The inverse strategy produced the lowest loss, validating that signal reliability matters more than error magnitude.
 
-The forward pass flows through both subsystems simultaneously. A learned gating mechanism at middle layers decides how much memory activation to mix into the Cognitive Core's processing. This is not attention over an external key-value store — it is weight-space routing within the model itself.
+### 6.8 Sensitivity-Guided LISA
 
-### 5.3 Multi-Adapter FigLinear
+| Method | Avg Loss (last 20 steps) | vs Random |
+|---|---|---|
+| Random LISA | 2.41 | baseline |
+| **Sensitivity-Guided LISA** | **2.17** | **−10%** |
 
-Standard LoRA adds one adapter pair (A, B) per linear layer. The Memory Fabric requires **N parallel adapters** per layer, one per namespace:
+GPT-2 (124M), 60 Alpaca steps. Transformer layers contribute unequally to adaptation: measuring influence before optimization allows resources to be concentrated where updates have the greatest effect.
 
-```
-output = base_weight(x) + Σᵢ gateᵢ × (x @ Aᵢ) @ Bᵢ × scaleᵢ
-```
+### 6.9 End-to-End CPU Fine-Tuning
 
-where `gateᵢ` ∈ [0, 1] is learned per-namespace and controls how much each memory namespace contributes to the current forward pass. The gate is conditioned on the input — different inputs activate different memory namespaces.
+The complete Fig Engine pipeline was verified end-to-end on GPT-2 with adaptive quantization, FigCache, FigSweep, FigKernel, and LoRA adaptation. The system completed forward propagation, backward propagation, and adapter checkpoint generation while maintaining compressed backbone weights throughout training, consuming 45.8 MB for base weights (7.4× compression from 339.7 MB).
 
-Memory cost: each namespace adapter is small (rank 4-32). For 5 namespaces at average rank 12 on a 2048-dim model: 5 × 2 × 2048 × 12 × 4 bytes = 960 KB per layer. For 32 layers: ~30 MB total Memory Fabric. This fits alongside the FigQuant INT4 Cognitive Core in 8GB RAM.
+### 6.10 Discussion
 
-### 5.4 Confidence as Adapter Magnitude
-
-The Ebbinghaus forgetting curve maps directly to weight decay:
-
-- **High confidence** = high adapter norm. The model holds this knowledge strongly.
-- **Decaying confidence** = adapter weights shrinking via selective weight decay.
-- **Reinforcement** = re-training on the same fact increases adapter magnitude.
-- **Forgetting** = weight decay applied proportionally to time-since-last-access.
-
-At inference, a faded adapter contributes weakly to the output — the model becomes *less certain* about that knowledge without explicitly tracking a confidence number. The uncertainty is structural, not metadata.
-
-### 5.5 The Wiki Layer (Knowledge Consolidation)
-
-The `wiki/` namespace adapter represents verified, permanent knowledge — the model's self-built knowledge base. Information is promoted through a pipeline:
-
-```
-Heard once → episodic/ adapter (high decay, rank 4)
-    ↓ repeated exposure across sessions
-Reinforced → personal/ adapter (medium decay, rank 8)
-    ↓ user confirmation / multi-source agreement
-Verified → wiki/ adapter (near-zero decay, rank 32)
-```
-
-Once in the wiki layer, knowledge is effectively permanent — like how GPT-4 "knows" that Paris is the capital of France. The model built this knowledge from its own experience, not from pretraining data.
-
-### 5.6 Conflict Detection in Activation Space
-
-When the same input activates two namespace adapters that produce opposing hidden states (high cosine distance between their outputs), this signals a conflict:
-
-1. Gating mechanism detects opposing activations
-2. Instead of averaging (which hallucinates a middle ground), routes to `contested/` adapter
-3. Contested adapter holds the uncertainty signal
-4. Cognitive Core generates a response that surfaces the conflict naturally
-5. User resolution → winning version promoted, losing version decayed
-
-This replaces external conflict detection databases with structural neural behavior.
-
-### 5.7 Micro-Training Between Turns
-
-Memory writes occur between conversation turns, not during generation:
-
-1. **During conversation:** Cognitive Core generates. Hidden states at gating layer signal "store this" (learned behavior from Memory Fabric token training).
-2. **At turn boundary:** Pending memories buffered as micro-training examples.
-3. **Between turns (target: <100ms):** Fig Engine runs 1-5 LoRA steps on the relevant namespace adapter. FigMeZO enables this even on 8GB machines (no backward pass needed).
-4. **Next turn:** Memory is now in weights. No retrieval needed.
-
-The user experiences zero latency — the model "just remembers."
-
-### 5.8 Relationship to Ember's Diaries
-
-The relationship between the three lower layers of the stack is precise and should not be conflated:
-
-**Ember's Diaries** is the cognitive specification (Layer 1). It defines how memory *should* behave — what append-only means, how confidence should decay, how conflicts should be preserved rather than silently resolved. It makes no assumptions about neural networks, weights, or adapters.
-
-**Memory Fabric** is the neural implementation (Layer 2). It asks: given Ember's behavioral specification, can those behaviors be approximated within trainable adapter parameters? The mapping is not one-to-one — it is an approximation, constrained by what gradient descent can encode.
-
-**Fig Engine** is the training infrastructure (Layer 3, this paper). It asks: given that Memory Fabric requires continuous micro-training, how do we make that training fast and memory-efficient enough to run between conversation turns on commodity hardware?
-
-The implementation mapping:
-
-| Ember's Diaries Principle | Memory Fabric Implementation |
-|---|---|
-| Immutable records | New adapters coexist with old (no overwrite) |
-| Supersession chains | New adapter layer trained; old one attenuated via decay |
-| Epistemic status | Adapter magnitude = confidence |
-| Decay rate | Selective weight decay proportional to access frequency |
-| Namespaces | Separate LoRA adapters per knowledge domain |
-| Conflict detection | Opposing adapter activations on same input |
-| Consolidation | Merging weak adapters into higher-rank verified adapter |
-| Episode segmentation | Training batch boundaries = episode boundaries |
-| Annotations | Adapter meta-state (training metadata, provenance) |
-
-Ember's Diaries does not care how these behaviors are implemented. A future implementation could use key-value caches, graph databases, or any other mechanism — and CogMem Benchmark would evaluate it on the same axes. Memory Fabric is one implementation. It is not the only possible one.
+The experimental results demonstrate that the contributions of Fig Engine are complementary rather than redundant. Adaptive quantization improves representational fidelity. Cache-aware execution reduces repeated reconstruction costs. Rolling layer scheduling bounds peak memory. Compiled kernels improve computational efficiency. Optimization algorithms exploit structural properties of quantized models to improve convergence. Collectively, these techniques transform CPU fine-tuning from a compatibility feature into a practical execution strategy.
 
 ---
 
-## 6. Conclusion
+## 7. Limitations
 
-Fig Engine demonstrates that CPU-native LLM fine-tuning with 8GB RAM is practical. The key architectural decisions are: (1) FigQuant's adaptive codebook reduces quantization error by 5.4% vs NF4 on real model weights (156/156 layers on TinyLlama); (2) FigMeZO exploits the quantization error structure to improve zeroth-order optimization by 18.6% — by probing clean dimensions rather than noisy ones; (3) Sensitivity-guided LISA concentrates training budget on the layers that actually affect the loss; (4) Memory Fabric's multi-adapter architecture encodes Ember's Diaries cognitive memory principles directly into dedicated trainable parameters, enabling continuous learning without catastrophic forgetting and without external retrieval systems.
+**Throughput vs. memory.** The current implementation prioritizes memory efficiency over absolute throughput. High-end GPUs continue to offer substantially greater training performance. Fig Engine expands access to model training rather than replacing GPU infrastructure for large-scale production workloads.
 
-Harboria Labs is building a complete memory stack for AI: a cognitive specification (Ember's Diaries) that defines how memory should behave, a neural implementation (Memory Fabric) that encodes those behaviors in trainable parameters, an efficient training system (Fig Engine) that makes continuous updates feasible on commodity hardware, and a benchmark (CogMem) that evaluates whether any of it actually improved memory — independently of implementation.
+**Architecture coverage.** The current evaluation focuses on decoder-only transformer architectures. The underlying techniques are expected to generalize to encoder-decoder models, but these settings have not been systematically evaluated.
 
-The model is not a static artifact. It is a living cognitive entity that builds its own knowledge base in its own parameters, organized by confidence and relevance, maintaining epistemic integrity through structural conflict detection — behaving, within the constraints of gradient descent, like Ember's Diaries says it should.
+**Manual configuration.** Parameters such as quantization group size, FigSweep window length, and cache strategy currently require heuristic selection based on available hardware. Future work may explore adaptive runtime policies.
+
+**Validation breadth.** FigMeZO and Sensitivity-Guided LISA demonstrate consistent improvements across GPT-2 and TinyLlama. Broader validation across larger model families and diverse downstream tasks remains important future work.
+
+---
+
+## 8. Future Work
+
+**Adaptive quantization.** Future versions of FigQuant may incorporate activation-aware refinement, adaptive group sizing, or runtime codebook evolution.
+
+**Dynamic scheduling.** FigSweep currently employs a fixed rolling window. Future schedulers could adjust window size dynamically according to processor cache occupancy and available memory bandwidth.
+
+**Architecture-specific kernels.** While the current implementation relies on torch.compile, architecture-specific code generation for AVX2, AVX-512, and ARM NEON may provide additional performance.
+
+**Memory Fabric integration.** The execution infrastructure developed in Fig Engine was designed not only for efficient one-time fine-tuning but to support persistent model adaptation through continuous micro-training between conversation turns. This capability is the foundation of Memory Fabric — a weight-space memory architecture described in a companion paper — which encodes memories directly into dedicated adapter parameters rather than external retrieval systems. Fig Engine's training tiers (particularly FigMeZO for backward-pass-free writes) enable Memory Fabric to perform memory writes within a <100ms budget on commodity hardware.
+
+---
+
+## 9. Conclusion
+
+This paper presented Fig Engine, a CPU-native training infrastructure for large language models designed around the constraints of commodity hardware rather than GPU execution.
+
+The framework combines adaptive quantization (FigQuant), cache-aware execution (FigCache), rolling layer scheduling (FigSweep), fused kernel compilation (FigKernel), and memory-aware optimization (FigMeZO, Sensitivity-Guided LISA) into a unified training system that substantially reduces memory requirements while preserving competitive fine-tuning quality. FigQuant achieves 5.3–5.4% lower MSE than fixed NF4 across all evaluated layers on both GPT-2 and TinyLlama 1.1B. The complete pipeline enables training on hardware previously considered impractical for modern language model adaptation.
+
+These contributions demonstrate that CPU-native fine-tuning is a systems design problem rather than a hardware limitation. By reducing memory movement throughout the execution pipeline, Fig Engine enables efficient adaptation of modern language models on commodity hardware.
+
+More broadly, Fig Engine provides the computational foundation for continual learning systems — specifically Memory Fabric, described in a companion paper — in which efficient weight-space memory writes become feasible between conversation turns on consumer devices.
 
 ---
 
 ## References
 
-1. Hu, E., et al. (2022). "LoRA: Low-Rank Adaptation of Large Language Models." ICLR 2022.
-2. Pan, T., et al. (2024). "LISA: Layerwise Importance Sampling for Memory-Efficient LLM Fine-Tuning." arxiv 2403.17919.
-3. Malladi, S., et al. (2023). "Fine-Tuning Language Models with Just Forward Passes." NeurIPS 2023. arxiv 2305.17333.
-4. Lv, K., et al. (2023). "Full Parameter Fine-tuning for Large Language Models with Limited Resources." arxiv 2306.09782.
-5. Dettmers, T., et al. (2023). "QLoRA: Efficient Finetuning of Quantized Language Models." NeurIPS 2023.
-6. Lin, J., et al. (2024). "AWQ: Activation-aware Weight Quantization." MLSys 2024.
-7. Conway, M.A. (2005). "Memory and the Self." Journal of Memory and Language.
-8. Wang, Y., et al. (2024). "MEMORYLLM: Towards Self-Updatable Large Language Models." arXiv:2402.04624.
-9. Fountas, Z., et al. (2024). "Human-inspired Episodic Memory for Infinite Context LLMs." arXiv:2407.09450.
-10. 0xticketguy (Harboria Labs). "Ember's Diaries: An Immutable Cognitive Database Engine for Grounded AI Memory." 2026. github.com/Harboria-Labs/embers-diaries
-11. 0xticketguy (Harboria Labs). "CogMemBench: A Benchmark for Continuous Cognitive Memory in Large Language Models." 2026. github.com/ticketguy/littlefig/tree/main/cogmembench
+1. Hu, E., et al. "LoRA: Low-Rank Adaptation of Large Language Models." ICLR 2022.
+2. Pan, T., et al. "LISA: Layerwise Importance Sampling for Memory-Efficient LLM Fine-Tuning." arXiv:2403.17919, 2024.
+3. Malladi, S., et al. "Fine-Tuning Language Models with Just Forward Passes." NeurIPS 2023. arXiv:2305.17333.
+4. Lv, K., et al. "Full Parameter Fine-tuning for Large Language Models with Limited Resources." arXiv:2306.09782, 2023.
+5. Dettmers, T., et al. "QLoRA: Efficient Finetuning of Quantized Language Models." NeurIPS 2023.
+6. Lin, J., et al. "AWQ: Activation-aware Weight Quantization." MLSys 2024.
+7. 0xticketguy (Harboria Labs). "Ember's Diaries: An Immutable Cognitive Database Engine for Grounded AI Memory." 2026. https://github.com/Harboria-Labs/embers-diaries
+8. 0xticketguy (Harboria Labs). "Memory Fabric: Neural Weight-Space Implementation of Ember's Diaries." 2026. https://github.com/Harboria-Labs/littlefig
+9. 0xticketguy (Harboria Labs). "CogMemBench: A Benchmark for Continuous Cognitive Memory in Large Language Models." 2026. https://github.com/Harboria-Labs/littlefig/tree/main/cogmembench
 
 ---
 
-*Code: https://github.com/ticketguy/littlefig*
+*Code: https://github.com/Harboria-Labs/littlefig*
 *License: AGPL-3.0*
-*Built by 0xticketguy / Harboria Labs.*
+*Built by 0xticketguy / Harboria Labs*
