@@ -1,14 +1,14 @@
-# Fig Engine: CPU-Native LLM Training via Adaptive Codebook Quantization and Cognitive Memory Embedding
+# Fig Engine: CPU-Native LLM Training Infrastructure for Neural Memory Embedding
 
-**Authors:** 0xticketguy (Harboria Labs)  
-**Repository:** https://github.com/ticketguy/littlefig  
+**Authors:** 0xticketguy (Harboria Labs)
+**Repository:** https://github.com/ticketguy/littlefig
 **Version:** 0.6
 
 ---
 
 ## Abstract
 
-We present **Fig Engine**, a system for fine-tuning large language models entirely on CPU with minimal RAM. Fig Engine combines five components: (1) **FigQuant**, an adaptive codebook INT4 quantization that refines NF4 quantiles via k-means — measured at 5.3% lower MSE than fixed NF4 and 57.0% lower MSE than uniform absmax INT4 across all 50 weight matrices in GPT-2, winning every layer; (2) **FigCache**, a three-tier caching strategy that trades between memory and speed by caching unpacked codebook indices instead of full FP32 weights — 75% less memory at 1.3× the speed of no-cache; (3) **FigKernel**, torch.compile fused operations for RMSNorm (2.95× speedup), SwiGLU, cross-entropy, and linear+LoRA; (4) **FigSweep**, a rolling layer-window strategy that dequantizes only a subset of layers at a time during sequential forward passes; and (5) **Ember integration**, which trains cognitive memory operations directly into model weights via special tokens.
+We present **Fig Engine**, the training infrastructure layer of the Harboria Labs cognitive memory stack — a four-part research agenda comprising Ember's Diaries (cognitive memory specification), Memory Fabric (neural weight-space implementation), Fig Engine (training infrastructure), and CogMem Benchmark (evaluation). Fig Engine makes continuous training of Memory Fabric feasible on commodity hardware by combining five components: (1) **FigQuant**, an adaptive codebook INT4 quantization that refines NF4 quantiles via k-means — measured at 5.3% lower MSE than fixed NF4 and 57.0% lower MSE than uniform absmax INT4 across all 50 weight matrices in GPT-2, winning every layer; (2) **FigCache**, a three-tier caching strategy that trades between memory and speed by caching unpacked codebook indices instead of full FP32 weights — 75% less memory at 1.3× the speed of no-cache; (3) **FigKernel**, torch.compile fused operations for RMSNorm (2.95× speedup), SwiGLU, cross-entropy, and linear+LoRA; (4) **FigSweep**, a rolling layer-window strategy that dequantizes only a subset of layers at a time during sequential forward passes; and (5) **Memory Fabric training**, which injects 9 special tokens into the model vocabulary and trains it to perform cognitive memory operations consistent with Ember's Diaries specification.
 
 Fig Engine fine-tunes GPT-2 (124M) using 45.8 MB for base weights and projects TinyLlama (1.1B) at ~400 MB — an order of magnitude below the 26.6 GB required by standard FP32+AdamW.
 
@@ -22,7 +22,46 @@ Current LLM fine-tuning tools (Unsloth, LLaMA-Factory, TRL) assume GPU with high
 
 The fundamental bottleneck on CPU is **memory bandwidth** (5-8 GB/s), not compute. A 1.1B model in FP32 requires 4.4 GB for weights alone, plus 4.4 GB for gradients and 8.8 GB for AdamW states — 26.6 GB total, exceeding most consumer machines.
 
-### Contributions
+### 1.1 Research Stack
+
+Fig Engine is the third layer of a four-part Harboria Labs research agenda. Each layer addresses a distinct question:
+
+| Layer | Component | Question |
+|---|---|---|
+| 1 | **Ember's Diaries** | What should an AI memory system behave like? |
+| 2 | **Memory Fabric** | Can those behaviors be implemented in neural weights? |
+| 3 | **Fig Engine** *(this paper)* | How do we train Memory Fabric on commodity hardware? |
+| 4 | **CogMem Benchmark** | Did any of this actually improve memory? |
+
+The dependency structure is:
+
+```
+      CogMem Benchmark
+             ▲
+             │ evaluates
+             │
+      ┌──────┴──────┐
+      │             │
+Memory Fabric   Other Memory Systems
+      ▲
+      │ implements
+      │
+Ember's Diaries
+      ▲
+      │ trained by
+      │
+  Fig Engine
+```
+
+**Ember's Diaries** (github.com/Harboria-Labs/embers-diaries) is not a neural network. It is a cognitive memory specification — a set of behavioral principles (append-only history, supersession, confidence decay, episodic organization, conflict preservation, consolidation, reflection, provenance) that define how any memory system should behave. It makes no assumptions about implementation. Think of it as TCP for memory: a protocol specification, not hardware.
+
+**Memory Fabric** is the neural implementation of Ember's Diaries. It does not store records in a database. Instead, it approximates Ember's cognitive behaviors within dedicated trainable adapter parameters organized by memory namespace. The Memory Fabric paper examines whether Ember's behaviors can be structurally encoded into weights.
+
+**Fig Engine** (this paper) is the systems layer. It answers the practical question: given that Memory Fabric requires continuous micro-training to encode and update memories, how do you make that training fast enough and memory-efficient enough to run between conversation turns on an 8GB machine?
+
+**CogMem Benchmark** evaluates whether any of this produced a measurably better memory system — independently of Memory Fabric's specific implementation.
+
+### 1.2 Contributions
 
 1. **FigQuant**: Adaptive codebook INT4 quantization with k-means refinement and double quantization. 0.9948 cosine similarity on GPT-2 real weights (50 layers), 5.3% less MSE than NF4 on every layer, 7.4× compression.
 
@@ -34,7 +73,7 @@ The fundamental bottleneck on CPU is **memory bandwidth** (5-8 GB/s), not comput
 
 5. **Four Training Tiers**: Automatic selection of LoRA, LISA, MeZO, or LOMO based on available RAM. Each tier uses FigQuant weights and benefits from FigKernel acceleration.
 
-6. **Ember Memory Embedding**: 9 special tokens (`<|mem_store|>`, `<|mem_recall|>`, etc.) injected into the model vocabulary, with synthetic training data generation for cognitive memory operations.
+6. **Memory Fabric Training Infrastructure**: 9 special tokens (`<|mem_store|>`, `<|mem_recall|>`, etc.) injected into the model vocabulary, with synthetic training data generation that teaches the model to perform cognitive memory operations consistent with Ember's Diaries behavioral specification.
 
 ---
 
@@ -55,7 +94,7 @@ Note: sensitivity weighting (upweighting high-magnitude values during k-means) w
 Measured on all 50 weight matrices in GPT-2 (124M), group_size=128:
 
 | Method | Cosine Sim | MSE | SNR (dB) |
-|--------|-----------|-----|----------|
+|---|---|---|---|
 | **FigQuant** | **0.9948** | **1.768e-4** | **19.8** |
 | NF4 (fixed codebook) | 0.9946 | 1.866e-4 | 19.6 |
 | Absmax INT4 (uniform) | 0.9883 | 4.114e-4 | 17.1 |
@@ -67,7 +106,7 @@ FigQuant vs NF4: **5.3% lower MSE**, +0.2 dB SNR — FigQuant wins on **50/50 la
 FigQuant's dequantization has three stages: (1) bit-unpacking packed indices, (2) codebook lookup, (3) scale multiplication. Profiling reveals bit-unpacking is 60% of total dequant time. FigCache exploits this by offering three modes:
 
 | Mode | What's cached | Memory (768→2048) | Speed vs fast |
-|------|--------------|-------------------|---------------|
+|---|---|---|---|
 | **fast** | Full FP32 weight | 6144 KB (100%) | 1.0× |
 | **figcache** | Unpacked uint8 indices | 1536 KB (25%) | 2.2× |
 | **lowram** | Nothing (packed INT4) | 828 KB (13%) | 2.9× |
@@ -99,13 +138,15 @@ Fused operations via `torch.compile(backend="inductor")`, generating AVX-512 on 
 Auto-selected by available RAM (70% budget, 30% OS headroom):
 
 | Tier | Method | Memory (1.1B) | Quality |
-|------|--------|---------------|---------|
+|---|---|---|---|
 | 1 | Streaming LoRA | ~400 MB | Good |
 | 2 | LISA | ~900 MB | Better |
 | 3 | MeZO | ~600 MB | Acceptable |
 | 4 | LOMO | ~800 MB | Best |
 
-### 2.6 Ember Memory Integration
+### 2.6 Memory Fabric Training
+
+Fig Engine provides the training infrastructure that teaches a model to operate a Memory Fabric instance consistent with Ember's Diaries behavioral specification. The relationship is precise: Ember's Diaries defines *what* memory operations should do; Memory Fabric defines *how* they are encoded in neural weights; Fig Engine makes training that encoding feasible on CPU.
 
 9 special tokens injected into the model vocabulary via `ember_mode=True`:
 
@@ -115,7 +156,20 @@ Auto-selected by available RAM (70% budget, 30% OS headroom):
 <|mem_reflect|>  <|memory_start|>  <|memory_end|>
 ```
 
-The training data generator produces synthetic examples across 7 memory operation types (store, recall, consolidate, forget, conflict detection, episode segmentation, reflection). The trained model learns to emit memory operations as part of its text generation, enabling it to operate an Ember's Diaries instance.
+These tokens correspond directly to Ember's Diaries behavioral principles:
+
+| Ember's Diaries Principle | Trained Token | Memory Fabric Behavior |
+|---|---|---|
+| Append-only history | `<|mem_store|>` | Write to namespace adapter without overwriting |
+| Supersession | `<|mem_store|>` | Attenuate old adapter, train new one |
+| Confidence decay | `<|mem_forget|>` | Selective weight decay on target namespace |
+| Episodic organization | `<|mem_episode|>` | Training batch boundaries = episode boundaries |
+| Conflict preservation | `<|mem_conflict|>` | Route to contested/ namespace |
+| Consolidation | `<|mem_consolidate|>` | Promote episodic/ → wiki/ adapter |
+| Reflection | `<|mem_reflect|>` | Annotate adapter meta-state |
+| Recall | `<|mem_recall|>` | Gate activation on relevant namespace |
+
+The training data generator produces synthetic examples across 7 memory operation types (store, recall, consolidate, forget, conflict detection, episode segmentation, reflection). The trained model learns to emit memory operation tokens as part of its text generation, triggering the corresponding Memory Fabric adapter updates.
 
 ---
 
@@ -126,7 +180,7 @@ The training data generator produces synthetic examples across 7 memory operatio
 All three methods measured on every 2D weight matrix in GPT-2 (50 layers), group_size=128. Real NF4 uses the same fixed codebook that FigQuant initializes from but with zero refinement. Absmax INT4 uses 16 uniformly-spaced levels.
 
 | Layer type | FigQuant MSE | NF4 MSE | FQ wins |
-|-----------|-------------|---------|---------|
+|---|---|---|---|
 | Embeddings (wte, wpe) | 1.57e-4 | 1.75e-4 | 2/2 |
 | Attention (c_attn, c_proj) | 1.83e-4 | 1.94e-4 | 24/24 |
 | MLP (c_fc, c_proj) | 1.68e-4 | 1.74e-4 | 24/24 |
@@ -138,7 +192,7 @@ FigQuant vs Absmax INT4: **57.0% less MSE**, +2.7 dB SNR.
 ### 3.2 FigCache Benchmark (768→2048, seq=128)
 
 | Mode | Forward (ms) | Cache memory | vs fast |
-|------|-------------|-------------|---------|
+|---|---|---|---|
 | nn.Linear | 1.70 | 6144 KB (FP32) | baseline |
 | fast | 2.18 | 6144 KB | 1.0× |
 | figcache | 4.86 | 1536 KB | 2.2× |
@@ -156,7 +210,7 @@ FigCache produces **zero numerical error** vs fast mode — the output is bit-id
 ### 3.4 Memory Projections
 
 | Model | Standard | Fig Tier 1 (LoRA) | Fits 8GB? |
-|-------|---------|-------------------|-----------|
+|---|---|---|---|
 | GPT-2 (124M) | 3.48 GB | ~350 MB | ✓ |
 | TinyLlama (1.1B) | 26.6 GB | ~400 MB | ✓ |
 | Gemma 4B | 96.9 GB | ~1.5 GB | ✓ |
@@ -165,7 +219,7 @@ FigCache produces **zero numerical error** vs fast mode — the output is bit-id
 ### 3.5 FigKernel Benchmarks (CPU, 2048 hidden, seq=256)
 
 | Operation | Standard | FigKernel | Speedup |
-|-----------|---------|-----------|---------|
+|---|---|---|---|
 | RMSNorm | 4.72 ms | 1.60 ms | 2.95× |
 | Cross-entropy (32K vocab) | Full alloc | 8K chunks | ~8× less memory |
 
@@ -188,7 +242,7 @@ The following results are original contributions validated experimentally on GPT
 **Result (GPT-2, Alpaca, 100 steps, 3 seeds):**
 
 | Method | Avg Loss (last 20) | vs MeZO |
-|--------|:-:|:-:|
+|---|---|---|
 | Standard MeZO | 6.08 ± 0.78 | baseline |
 | FigMeZO (α=−0.3) | **4.95 ± 0.58** | **−18.6%** |
 | FigMeZO (α=+0.7) | 6.69 ± 0.17 | +10% worse |
@@ -204,7 +258,7 @@ The following results are original contributions validated experimentally on GPT
 **Result (GPT-2, Alpaca, 60 steps):**
 
 | Method | Avg Loss (last 20) | vs Random |
-|--------|:-:|:-:|
+|---|---|---|
 | Random LISA | 2.41 | baseline |
 | Sensitivity-Weighted LISA | **2.17** | **−10%** |
 
@@ -219,7 +273,7 @@ Block sensitivity measured: Block 0 = 0.053, Block 4 = 0.049, Block 6 = 0.052 (h
 **Result (GPT-2, 50 layers):**
 
 | Mode | Avg MSE | Load Time | Quality Cost |
-|------|:-:|:-:|:-:|
+|---|---|---|---|
 | Per-layer (default) | 1.768e-4 | 49.3s | baseline |
 | Shared codebook | 1.822e-4 | **9.7s (5.1× faster)** | +3.1% MSE |
 | Fixed NF4 (no k-means) | 1.866e-4 | ~9s | +5.6% MSE |
@@ -233,7 +287,7 @@ In practice, the shared codebook produces only 0.1% loss difference on actual mo
 Live benchmark on all 156 linear layers of TinyLlama 1.1B, group_size=128:
 
 | Method | Cosine Sim | MSE | SNR (dB) | Wins |
-|--------|:-:|:-:|:-:|:-:|
+|---|---|---|---|---|
 | **FigQuant** | **0.9956** | **5.64e-6** | **20.4** | **156/156** |
 | NF4 (QLoRA standard) | 0.9953 | 5.97e-6 | 20.1 | 0/156 |
 | Absmax INT4 | 0.9936 | 8.94e-6 | 18.7 | 0/156 |
@@ -245,12 +299,13 @@ FigQuant wins every layer against both baselines. 5.4% lower MSE than NF4, 36.9%
 All methods trained with identical configuration: LoRA r=16, α=32, target=[q,k,v,o]_proj, batch=4×4, lr=2e-4, 100 optimizer steps on Alpaca.
 
 | Method | Final Loss | Training Time | GPU Memory | Relative Speed |
-|--------|:-:|:-:|:-:|:-:|
+|---|---|---|---|---|
 | FP16 LoRA (gold standard) | 0.2252 | 1309s | 3,585 MB | 1.0× |
 | BnB NF4 QLoRA (industry default) | 0.2399 | 1423s | 2,441 MB | 0.9× |
 | **FigQuant LoRA (lowram mode)** | **0.2475** | **184s** | **10,181 MB** | **7.1×** |
 
 Key findings:
+
 - **FigQuant is 7× faster** than both FP16 and NF4 on GPU. The speed advantage comes from FigQuant's fused dequant-matmul path which avoids the overhead of bitsandbytes' per-tensor quantization/dequantization cycle.
 - Loss is competitive: only 10% higher than FP16 (0.2475 vs 0.2252), and matches NF4 quality (0.2475 vs 0.2399).
 - Memory is higher (10GB) because lowram mode re-dequantizes on every forward pass, creating temporary FP32 tensors. The `figcache` mode (not tested on GPU yet) should reduce this significantly while maintaining the speed advantage.
@@ -260,18 +315,22 @@ Perplexity (GPT-2, wikitext-2): FP32=32.81, FigQuant=35.33 (+7.7% — typical fo
 
 ---
 
-## 5. Dual-Architecture Memory System: Cognitive Core + Memory Fabric
+## 5. Memory Fabric: Neural Implementation of Ember's Diaries
 
 ### 5.1 Design Philosophy
 
 Current approaches to LLM memory fall into two failing categories: (1) external retrieval systems (RAG, vector databases) that add latency and lose information at chunk boundaries, and (2) destructive weight updates (MemoryLLM, MEGa) that cause catastrophic forgetting by overwriting old knowledge with new.
 
+Memory Fabric introduces a third approach grounded in the Ember's Diaries cognitive specification: **adaptive memory encoded directly into trainable parameters rather than relying on an external retrieval store.** The Cognitive Core (pretrained base weights) is never modified. A separate Memory Fabric partition — dedicated multi-namespace adapter parameters — receives continuous micro-training updates as new information arrives.
+
+This mirrors the TCP analogy for Ember's Diaries: Ember specifies the protocol; Memory Fabric implements it in neural hardware. Just as a network card implements TCP without the protocol caring about the underlying silicon, Memory Fabric implements Ember's behavioral principles without Ember's Diaries prescribing how.
+
+The key architectural consequence: **no retrieval latency, no context window pressure, no external database.** The Cognitive Core and Memory Fabric share the same forward pass. The model does not look up information from an external store — it holds memory in dedicated adapter parameters that activate during inference via a learned gating mechanism. Instead of retrieving memories from an external database, Memory Fabric continually updates dedicated neural memory parameters organized according to Ember's cognitive principles.
+
 We propose a **dual-architecture** within a single model: two subsystems sharing the same forward pass, communicating via internal hidden states — analogous to ROM/RAM in a computer.
 
 - **Cognitive Core** ("ROM") — the pretrained base model. Handles language, reasoning, planning. Changes rarely. Holds general intelligence.
 - **Memory Fabric** ("RAM") — dedicated adapter regions organized by namespace. Changes continuously. Holds personal knowledge, episodic history, verified facts.
-
-The key constraint: **no external retrieval.** Memory lives in the weights. The model doesn't "look up" information — it *knows* it, because the knowledge is part of its neural network. There is no retrieval latency, no context window pressure, no external database to maintain.
 
 ### 5.2 Architecture
 
@@ -352,7 +411,7 @@ This replaces external conflict detection databases with structural neural behav
 
 Memory writes occur between conversation turns, not during generation:
 
-1. **During conversation:** Cognitive Core generates. Hidden states at gating layer signal "store this" (learned behavior from Ember token training).
+1. **During conversation:** Cognitive Core generates. Hidden states at gating layer signal "store this" (learned behavior from Memory Fabric token training).
 2. **At turn boundary:** Pending memories buffered as micro-training examples.
 3. **Between turns (target: <100ms):** Fig Engine runs 1-5 LoRA steps on the relevant namespace adapter. FigMeZO enables this even on 8GB machines (no backward pass needed).
 4. **Next turn:** Memory is now in weights. No retrieval needed.
@@ -361,12 +420,20 @@ The user experiences zero latency — the model "just remembers."
 
 ### 5.8 Relationship to Ember's Diaries
 
-Ember's Diaries provides the **cognitive specification** for how weight-space memory should behave:
+The relationship between the three lower layers of the stack is precise and should not be conflated:
 
-| Ember Concept | Weight-Space Implementation |
+**Ember's Diaries** is the cognitive specification (Layer 1). It defines how memory *should* behave — what append-only means, how confidence should decay, how conflicts should be preserved rather than silently resolved. It makes no assumptions about neural networks, weights, or adapters.
+
+**Memory Fabric** is the neural implementation (Layer 2). It asks: given Ember's behavioral specification, can those behaviors be approximated within trainable adapter parameters? The mapping is not one-to-one — it is an approximation, constrained by what gradient descent can encode.
+
+**Fig Engine** is the training infrastructure (Layer 3, this paper). It asks: given that Memory Fabric requires continuous micro-training, how do we make that training fast and memory-efficient enough to run between conversation turns on commodity hardware?
+
+The implementation mapping:
+
+| Ember's Diaries Principle | Memory Fabric Implementation |
 |---|---|
 | Immutable records | New adapters coexist with old (no overwrite) |
-| Supersession chains | New adapter layer trained; old one attenuated |
+| Supersession chains | New adapter layer trained; old one attenuated via decay |
 | Epistemic status | Adapter magnitude = confidence |
 | Decay rate | Selective weight decay proportional to access frequency |
 | Namespaces | Separate LoRA adapters per knowledge domain |
@@ -375,15 +442,17 @@ Ember's Diaries provides the **cognitive specification** for how weight-space me
 | Episode segmentation | Training batch boundaries = episode boundaries |
 | Annotations | Adapter meta-state (training metadata, provenance) |
 
-Ember's Diaries is not an external database — it is the architectural blueprint for neural memory organization.
+Ember's Diaries does not care how these behaviors are implemented. A future implementation could use key-value caches, graph databases, or any other mechanism — and CogMem Benchmark would evaluate it on the same axes. Memory Fabric is one implementation. It is not the only possible one.
 
 ---
 
 ## 6. Conclusion
 
-Fig Engine demonstrates that CPU-native LLM fine-tuning with 8GB RAM is practical. The key architectural decisions are: (1) FigQuant's adaptive codebook reduces quantization error by 5.4% vs NF4 on real model weights (156/156 layers on TinyLlama); (2) FigMeZO exploits the quantization error structure to improve zeroth-order optimization by 18.6% — by probing clean dimensions rather than noisy ones; (3) Sensitivity-guided LISA concentrates training budget on the layers that actually affect the loss; (4) The dual-architecture memory system embeds cognitive memory directly into model weights as a multi-adapter fabric, enabling continuous learning without catastrophic forgetting and without external retrieval systems.
+Fig Engine demonstrates that CPU-native LLM fine-tuning with 8GB RAM is practical. The key architectural decisions are: (1) FigQuant's adaptive codebook reduces quantization error by 5.4% vs NF4 on real model weights (156/156 layers on TinyLlama); (2) FigMeZO exploits the quantization error structure to improve zeroth-order optimization by 18.6% — by probing clean dimensions rather than noisy ones; (3) Sensitivity-guided LISA concentrates training budget on the layers that actually affect the loss; (4) Memory Fabric's multi-adapter architecture encodes Ember's Diaries cognitive memory principles directly into dedicated trainable parameters, enabling continuous learning without catastrophic forgetting and without external retrieval systems.
 
-The system treats the model not as a static artifact but as a living cognitive entity that builds its own knowledge base in its own parameters — learning from every interaction, organizing knowledge by confidence and relevance, and maintaining epistemic integrity through structural conflict detection.
+Harboria Labs is building a complete memory stack for AI: a cognitive specification (Ember's Diaries) that defines how memory should behave, a neural implementation (Memory Fabric) that encodes those behaviors in trainable parameters, an efficient training system (Fig Engine) that makes continuous updates feasible on commodity hardware, and a benchmark (CogMem) that evaluates whether any of it actually improved memory — independently of implementation.
+
+The model is not a static artifact. It is a living cognitive entity that builds its own knowledge base in its own parameters, organized by confidence and relevance, maintaining epistemic integrity through structural conflict detection — behaving, within the constraints of gradient descent, like Ember's Diaries says it should.
 
 ---
 
@@ -398,9 +467,11 @@ The system treats the model not as a static artifact but as a living cognitive e
 7. Conway, M.A. (2005). "Memory and the Self." Journal of Memory and Language.
 8. Wang, Y., et al. (2024). "MEMORYLLM: Towards Self-Updatable Large Language Models." arXiv:2402.04624.
 9. Fountas, Z., et al. (2024). "Human-inspired Episodic Memory for Infinite Context LLMs." arXiv:2407.09450.
+10. 0xticketguy (Harboria Labs). "Ember's Diaries: An Immutable Cognitive Database Engine for Grounded AI Memory." 2026. github.com/Harboria-Labs/embers-diaries
+11. 0xticketguy (Harboria Labs). "CogMemBench: A Benchmark for Continuous Cognitive Memory in Large Language Models." 2026. github.com/ticketguy/littlefig/tree/main/cogmembench
 
 ---
 
-*Code: https://github.com/ticketguy/littlefig*  
-*License: AGPL-3.0*  
+*Code: https://github.com/ticketguy/littlefig*
+*License: AGPL-3.0*
 *Built by 0xticketguy / Harboria Labs.*
