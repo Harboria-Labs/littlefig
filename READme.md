@@ -100,7 +100,7 @@ print(results["score"])
 Launch the local Studio UI:
 
 ```bash
-little-fig
+little_fig
 ```
 
 ## Repository Map
