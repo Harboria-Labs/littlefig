@@ -3,7 +3,7 @@
 **Authors:** 0xticketguy (Harboria Labs)
 **Repository:** https://github.com/Harboria-Labs/littlefig/tree/main/cogmembench
 **Version:** 1.0 — Dataset: 1,000 evaluation cases across 5 cognitive axes
-**License:** AGPL-3.0
+**License:** CC-BY-4.0
 
 > **Harboria Labs Research Stack**
 > This paper is Layer 4 of a four-part research program.
@@ -422,5 +422,5 @@ The industry needs what this benchmark provides: an independent, reproducible wa
 ---
 
 *Code: https://github.com/Harboria-Labs/littlefig/tree/main/cogmembench*
-*License: AGPL-3.0*
+*License: CC-BY-4.0*
 *Built by 0xticketguy / Harboria Labs*

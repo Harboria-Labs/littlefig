@@ -473,5 +473,5 @@ The architecture is right. The question is whether the implementation is ready.
 ---
 
 *Code: https://github.com/Harboria-Labs/littlefig*
-*License: AGPL-3.0*
+*License: CC-BY-4.0*
 *Built by 0xticketguy / Harboria Labs*

@@ -474,5 +474,5 @@ More broadly, Fig Engine provides the computational foundation for continual lea
 ---
 
 *Code: https://github.com/Harboria-Labs/littlefig*
-*License: AGPL-3.0*
+*License: CC-BY-4.0*
 *Built by 0xticketguy / Harboria Labs*

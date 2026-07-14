@@ -1,5 +1,5 @@
 ---
-license: agpl-3.0
+license: mit
 task_categories:
   - question-answering
   - text-generation

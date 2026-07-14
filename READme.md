@@ -6,7 +6,7 @@ Train models with [Ember's Diaries](https://github.com/ticketguy/embers-diaries)
 
 [![Tests](https://img.shields.io/badge/tests-21%2F21%20passing-brightgreen)]()
 [![Python](https://img.shields.io/badge/python-3.9+-blue)]()
-[![License](https://img.shields.io/badge/license-AGPL--3.0-blue)]()
+[![License](https://img.shields.io/badge/license-mixed-blue)]()
 
 ---
 
@@ -190,4 +190,13 @@ See [`paper/fig_engine.md`](paper/fig_engine.md) for the full technical paper.
 
 ## License
 
-AGPL-3.0-or-later. Commercial license available from Harboria Labs.
+Little Fig uses component-specific licenses:
+
+| Component | License |
+|---|---|
+| Ember's Diaries integration and Memory Fabric core IP | AGPL-3.0-or-later + commercial option |
+| Fig Engine training infrastructure | Apache-2.0 |
+| CogMemBench benchmark code and dataset | MIT |
+| Research papers | CC-BY-4.0 |
+
+See [`NOTICE.md`](NOTICE.md) for the full license map and [`COMMERCIAL_LICENSE.md`](COMMERCIAL_LICENSE.md) for commercial licensing information.

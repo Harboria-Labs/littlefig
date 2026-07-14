@@ -3,7 +3,7 @@
 **Authors:** 0xticketguy (Harboria Labs)
 **Version:** 1.0
 **Dataset:** 1,000 evaluation cases across 5 cognitive axes
-**License:** AGPL-3.0
+**License:** CC-BY-4.0
 
 ---
 

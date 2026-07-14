@@ -420,5 +420,5 @@ The past is not a log. It is the database.
 ---
 
 *Code: https://github.com/Harboria-Labs/embers-diaries*
-*License: AGPL-3.0*
+*License: CC-BY-4.0*
 *Built by 0xticketguy / Harboria Labs*
