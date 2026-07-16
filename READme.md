@@ -185,6 +185,13 @@ trainer.load_ember_dataset(n_examples=1000)
 trainer.train()
 ```
 
+### Little Fig UI
+
+```python
+#Load the little fig UI
+little_fig
+```
+
 ### Try in Colab
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Harboria-Labs/littlefig/blob/main/Little_Fig_Colab.ipynb)
