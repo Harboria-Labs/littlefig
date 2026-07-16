@@ -188,65 +188,35 @@ trainer.train()
 ### Little Fig UI
 
 ```python
-#Load the little fig UI
+from cogmembench import CogMemRunner
+
+results = CogMemRunner().run(model_fn=your_model_fn)
+print(results["score"])
+```
+
+Launch the local Studio UI:
+
+```bash
 little_fig
 ```
 
-### Try in Colab
+## Repository Map
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Harboria-Labs/littlefig/blob/main/Little_Fig_Colab.ipynb)
-
----
-
-## Architecture
-
-```
-src/little_fig/
-├── engine/
-│   ├── figquant.py          # Adaptive codebook INT4 quantization
-│   ├── figkernel.py         # Fused ops: RMSNorm (2.95×), SwiGLU, CE, Linear+LoRA
-│   ├── figpipeline.py       # Async GPU-CPU training pipeline
-│   ├── figmezo.py           # Inverse error-shaped zeroth-order optimizer
-│   ├── figcache.py          # Three-tier cache: fast / figcache / lowram
-│   ├── memory_fabric.py     # Memory Fabric: multi-namespace adapter memory  ← AGPL-3.0
-│   ├── micro_trainer.py     # MicroTrainer: write memories between turns      ← AGPL-3.0
-│   ├── ember_integration.py # Memory tokens + Ember training data
-│   ├── linear.py            # FigLinear: FigQuant base + LoRA
-│   ├── model.py             # FigModel: streaming loader + shared codebook
-│   ├── trainer.py           # FigTrainer: unified training loop
-│   ├── tier.py              # Auto tier selection by available RAM
-│   ├── lisa.py              # Sensitivity-weighted LISA scheduler
-│   ├── lomo.py              # LOMO optimizer
-│   └── gguf_loader.py       # Universal GGUF loader
-
-cogmembench/                 # CogMemBench evaluation benchmark   ← MIT
-├── cogmembench.py           # Runner, Generator, Scorer
-├── paper/                   # arXiv-ready paper
-└── README.md
-
-paper/                       # Research papers (CC BY 4.0)
-├── fig_engine.md
-├── memory_fabric.md
-└── (ember's diaries → see Harboria-Labs/embers-diaries)
+```text
+src/little_fig/engine/     Fig Engine, Memory Fabric, and Ember integration
+src/little_fig/web/        Local Studio UI and API
+cogmembench/               Benchmark runner, scorer, generator, and dataset
+paper/                     Canonical research papers
+benchmark/                 Experiment scripts
+tests/                     Unit and validation tests
 ```
 
----
+## Research Papers
 
-## Engine Stack
-
-| Layer | Module | What it does |
-|---|---|---|
-| **Quantization** | FigQuant | Adaptive codebook INT4 — 5.4% less MSE than NF4, 7× faster training |
-| **Cache** | FigCache | Three-tier: 75% less memory than fast, 1.3× faster than LowRAM |
-| **Scheduling** | FigSweep | Rolling layer window — O(W) active memory instead of O(L) |
-| **Compute** | FigKernel | torch.compile fused ops — 2.95× RMSNorm, 8× less CE memory |
-| **Training** | 4 Tiers | LoRA → LISA → MeZO → LOMO, auto-selected by available RAM |
-| **Optimizer** | FigMeZO | Inverse error-shaped — −18.6% loss vs standard MeZO |
-| **Memory** | Memory Fabric | Multi-namespace adapters, gating, decay, conflict routing |
-| **Cognition** | Ember Integration | 9 memory tokens trained into model vocabulary |
-| **Benchmark** | CogMemBench | 5-axis cognitive memory evaluation, 1,000 cases |
-
----
+- [`paper/embers_diaries.md`](paper/embers_diaries.md): cognitive memory specification.
+- [`paper/memory_fabric.md`](paper/memory_fabric.md): neural weight-space memory implementation.
+- [`paper/fig_engine.md`](paper/fig_engine.md): CPU-native training infrastructure.
+- [`paper/cogmembench.md`](paper/cogmembench.md): cognitive memory benchmark.
 
 ## License
 
@@ -259,23 +229,4 @@ This repository contains components under different licenses. See [NOTICE.md](NO
 | CogMemBench (`cogmembench/`) | MIT |
 | All papers (`paper/`) | CC BY 4.0 |
 
-Commercial use of Memory Fabric without AGPL-3.0 compliance requires a license from Harboria Labs.
-See [COMMERCIAL_LICENSE.md](COMMERCIAL_LICENSE.md).
-
----
-
-## Citation
-
-```bibtex
-@misc{figengine2026,
-  title   = {Fig Engine: CPU-Native Training Infrastructure for Large Language Models},
-  author  = {0xticketguy},
-  year    = {2026},
-  publisher = {Harboria Labs},
-  url     = {https://github.com/Harboria-Labs/littlefig}
-}
-```
-
----
-
-*Built by [0xticketguy](https://github.com/ticketguy) / [Harboria Labs](https://github.com/Harboria-Labs)*
+See [`NOTICE.md`](NOTICE.md) for the full license map and [`COMMERCIAL_LICENSE.md`](COMMERCIAL_LICENSE.md) for commercial licensing information.
