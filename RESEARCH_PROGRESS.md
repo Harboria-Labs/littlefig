@@ -109,6 +109,16 @@ Status key: ✅ proven · 🟡 partial · ❌ unproven/contradicted · ⏳ not s
       OPTIONAL follow-up: re-run corrected script (logs train_est) to demonstrate
         the −18.6% appears in the train estimate but vanishes on eval.
 - [ ] P2: Reproduce FigQuant 156/156 on TinyLlama locally; save results JSON.
+      **Harness ready, awaiting Colab data.** Script: `benchmark/experiment_figquant_v2.py`
+      + self-contained `benchmark/P2_FigQuant_Colab.ipynb`. Tests the SHIPPED
+      `figquant_quantize` (group_size=128, n_iters=8), reproduces GPT-2 50/50 as a
+      harness self-check vs committed `v05_results.json`, then runs the missing
+      TinyLlama 1.1B benchmark (156 layers). Deterministic single run (no seeds —
+      k-means from fixed NF4 init on fixed weights). Memory-safe smallest-first
+      streaming (~9 GB peak) so the two 65.5M embed/lm_head matrices fit free Colab.
+      Note: FigQuant = "NF4 init + per-layer k-means"; k-means provably lowers
+      *normalized* distortion, but the metric is *reconstruction* MSE (reweighted by
+      per-group scale²), so all-156-wins is a real empirical result, not a tautology.
 - [ ] P3: Implement the Memory Fabric gate fix (decoupled lr param groups + B-init) that the
       README already claims, then run the synthetic gate-open test to confirm "3 steps".
 - [ ] P4: Run Memory Fabric Stage 3 — write N facts into TinyLlama weights, measure
