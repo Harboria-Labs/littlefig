@@ -87,11 +87,20 @@ Status key: ✅ proven · 🟡 partial · ❌ unproven/contradicted · ⏳ not s
 ## Plan
 
 ### Phase 1 — Verify & prove (current focus)
-- [~] P1: Write a real FigMeZO experiment that sweeps α ∈ {−0.3, 0, +0.7} across ≥5 seeds,
-      report eval loss + CI. Confirm or refute −18.6%.
-      → IN PROGRESS. Script: `benchmark/experiment_figmezo_v2.py`. Uses one FigMeZO code
-        path (α=0 is exact standard-MeZO control), held-out eval loss, paired per-seed
-        design, 95% CI, verdict logic. Smoke test running on CPU (gpt2).
+- [~] P1: FigMeZO α-sweep verification. Confirm or refute −18.6%.
+      Script: `benchmark/experiment_figmezo_v2.py` + self-contained Colab notebook.
+      Design: one FigMeZO code path (α=0 = exact standard-MeZO control), held-out
+      eval loss, paired per-seed, proper small-sample t-CIs, logs BOTH eval loss and
+      the paper's original train-estimate metric.
+
+      PROVISIONAL (smoke: 2 seeds × 8 steps, gpt2/Alpaca, Colab):
+        α=−0.3 eval 5.3069 | α=0 eval 5.3148 | α=+0.7 eval 5.3117
+        → α=−0.3 is −0.15% vs standard on HELD-OUT EVAL LOSS.
+        → Direction matches paper (−0.3 best), but magnitude is ~180× smaller
+          than the claimed −18.6%.
+      HYPOTHESIS: the −18.6% lives in the noisy in-sample train-estimate
+        (L⁺+L⁻)/2 (single seed), not in generalization. Full 5-seed/100-step run
+        in progress to confirm. Likely outcome: "direction-only, magnitude refuted."
 - [ ] P2: Reproduce FigQuant 156/156 on TinyLlama locally; save results JSON.
 - [ ] P3: Implement the Memory Fabric gate fix (decoupled lr param groups + B-init) that the
       README already claims, then run the synthetic gate-open test to confirm "3 steps".

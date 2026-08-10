@@ -106,17 +106,26 @@ def run_one(alpha, seed, train, eval_batches, steps):
 
     del model, opt
     gc.collect()
-    return ev_before, ev_after, trace
+    # Also return the paper's ORIGINAL metric: mean perturbed train-loss estimate
+    # over the final third of steps (in-sample, noisy — this is what -18.6% likely used).
+    tail = trace[len(trace)//3:] if trace else trace
+    train_est = float(np.mean(tail)) if tail else float("nan")
+    return ev_before, ev_after, train_est
 
 
 def mean_ci(xs):
     xs = np.asarray(xs, dtype=float)
     m = xs.mean()
-    if len(xs) < 2:
+    n = len(xs)
+    if n < 2:
         return m, 0.0
-    # 95% CI via t-ish 1.96 (small n, report sem*1.96 as an honest approximation)
-    sem = xs.std(ddof=1) / math.sqrt(len(xs))
-    return m, 1.96 * sem
+    # Proper two-sided 95% t-multiplier by dof = n-1 (NOT 1.96, which only holds
+    # for large n). Small-sample CIs are much wider — critical for honest verdicts.
+    T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571,
+           6: 2.447, 7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228}
+    t = T95.get(n - 1, 1.96)
+    sem = xs.std(ddof=1) / math.sqrt(n)
+    return m, t * sem
 
 
 def main():
@@ -142,18 +151,19 @@ def main():
     train, eval_batches = prepare_data(n_train, n_eval, MAX_LEN)
     base_seeds = [42 + 100 * i for i in range(n_seeds)]
 
-    # results[alpha] = list of eval_after over seeds; also keep deltas (after-before)
-    results = {a: {"after": [], "delta": [], "before": []} for a in ALPHAS}
+    # results[alpha] = eval_after / delta / train_est over seeds
+    results = {a: {"after": [], "delta": [], "before": [], "train_est": []} for a in ALPHAS}
     t0 = time.time()
 
     for si, seed in enumerate(base_seeds):
         for alpha in ALPHAS:
-            eb, ea, trace = run_one(alpha, seed, train, eval_batches, steps)
+            eb, ea, te = run_one(alpha, seed, train, eval_batches, steps)
             results[alpha]["before"].append(eb)
             results[alpha]["after"].append(ea)
             results[alpha]["delta"].append(ea - eb)
+            results[alpha]["train_est"].append(te)
             log(f"  seed {seed:>4} alpha {alpha:+.2f}: "
-                f"eval {eb:.4f} -> {ea:.4f} (delta {ea-eb:+.4f})")
+                f"eval {eb:.4f} -> {ea:.4f} (delta {ea-eb:+.4f}) | train_est {te:.4f}")
 
     log("\n" + "=" * 64)
     log("  RESULTS — held-out eval loss (mean +/- 95% CI over seeds)")
@@ -161,39 +171,63 @@ def main():
 
     summary = {}
     base_mean, _ = mean_ci(results[0.0]["after"])
+    base_te_mean, _ = mean_ci(results[0.0]["train_est"])
     for alpha in ALPHAS:
         m, ci = mean_ci(results[alpha]["after"])
         dm, dci = mean_ci(results[alpha]["delta"])
+        tem, teci = mean_ci(results[alpha]["train_est"])
         pct_vs_std = (m - base_mean) / base_mean * 100 if base_mean else float("nan")
+        pct_te_vs_std = (tem - base_te_mean) / base_te_mean * 100 if base_te_mean else float("nan")
         summary[str(alpha)] = {
             "eval_after_mean": m, "eval_after_ci95": ci,
             "delta_mean": dm, "delta_ci95": dci,
-            "pct_vs_alpha0": pct_vs_std,
+            "pct_vs_alpha0_EVAL": pct_vs_std,
+            "train_est_mean": tem, "train_est_ci95": teci,
+            "pct_vs_alpha0_TRAINEST": pct_te_vs_std,
             "eval_after_raw": results[alpha]["after"],
+            "train_est_raw": results[alpha]["train_est"],
         }
         tag = "  <- standard MeZO (control)" if alpha == 0.0 else ""
-        log(f"  alpha {alpha:+.2f}: eval_after = {m:.4f} +/- {ci:.4f}"
-            f"   ({pct_vs_std:+.1f}% vs standard){tag}")
+        log(f"  alpha {alpha:+.2f}: EVAL={m:.4f}+/-{ci:.4f} ({pct_vs_std:+.1f}%)"
+            f" | TRAIN_EST={tem:.4f} ({pct_te_vs_std:+.1f}%){tag}")
 
-    # Verdict on the -0.3 claim
+    # Verdict on the -0.3 claim — judge MAGNITUDE, not just sign.
     claim = summary.get("-0.3")
     log("\n" + "-" * 64)
     if claim:
-        pct = claim["pct_vs_alpha0"]
+        pct_eval = claim["pct_vs_alpha0_EVAL"]
+        pct_te = claim["pct_vs_alpha0_TRAINEST"]
         neg03 = np.asarray(results[-0.3]["after"])
         std0 = np.asarray(results[0.0]["after"])
-        # paired difference test (same seeds)
-        diff = neg03 - std0
+        diff = neg03 - std0                      # paired, same seeds
         paired_mean, paired_ci = mean_ci(diff)
-        better = paired_mean < 0 and (paired_mean + paired_ci) < 0  # CI excludes 0
-        log(f"  CLAIM: alpha=-0.3 gives -18.6% vs standard MeZO.")
-        log(f"  FOUND: alpha=-0.3 is {pct:+.1f}% vs standard (eval loss).")
-        log(f"  Paired (per-seed) mean diff = {paired_mean:+.4f} +/- {paired_ci:.4f}")
-        log(f"  VERDICT: {'SUPPORTED (CI excludes 0, direction correct)' if better else 'NOT SUPPORTED at this scale'}")
+        ci_excludes_0 = (paired_mean + paired_ci) < 0 or (paired_mean - paired_ci) > 0
+        direction_ok = paired_mean < 0
+        # "Reproduced" requires being in the same ballpark as -18.6% on eval loss.
+        magnitude_ok = pct_eval <= -5.0         # generous: at least a 5% eval-loss win
+        log(f"  CLAIM (paper): alpha=-0.3 gives -18.6% vs standard MeZO.")
+        log(f"  EVAL loss:      alpha=-0.3 is {pct_eval:+.2f}% vs standard.")
+        log(f"  TRAIN estimate: alpha=-0.3 is {pct_te:+.2f}% vs standard  (paper's likely metric).")
+        log(f"  Paired eval diff = {paired_mean:+.4f} +/- {paired_ci:.4f}  "
+            f"(CI excludes 0: {ci_excludes_0})")
+        if magnitude_ok and ci_excludes_0:
+            verdict = "REPRODUCED (large effect, CI excludes 0)"
+        elif direction_ok and ci_excludes_0:
+            verdict = "DIRECTION ONLY (alpha=-0.3 helps, but effect ~100x smaller than -18.6%)"
+        elif direction_ok:
+            verdict = "INCONCLUSIVE (right direction, CI includes 0 — noise-dominated)"
+        else:
+            verdict = "REFUTED (alpha=-0.3 did not help on held-out eval)"
+        log(f"  VERDICT: {verdict}")
         summary["_verdict"] = {
-            "claim_pct": -18.6, "found_pct": pct,
-            "paired_mean_diff": paired_mean, "paired_ci95": paired_ci,
-            "supported": bool(better),
+            "claim_pct": -18.6,
+            "found_pct_EVAL": pct_eval,
+            "found_pct_TRAINEST": pct_te,
+            "paired_eval_mean_diff": paired_mean, "paired_eval_ci95": paired_ci,
+            "ci_excludes_0": bool(ci_excludes_0),
+            "direction_correct": bool(direction_ok),
+            "magnitude_reproduced": bool(magnitude_ok),
+            "verdict": verdict,
         }
 
     summary["_config"] = {
