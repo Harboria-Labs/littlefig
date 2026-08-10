@@ -87,20 +87,27 @@ Status key: ✅ proven · 🟡 partial · ❌ unproven/contradicted · ⏳ not s
 ## Plan
 
 ### Phase 1 — Verify & prove (current focus)
-- [~] P1: FigMeZO α-sweep verification. Confirm or refute −18.6%.
+- [x] P1: FigMeZO α-sweep verification. **VERDICT: −18.6% claim REFUTED.**
       Script: `benchmark/experiment_figmezo_v2.py` + self-contained Colab notebook.
       Design: one FigMeZO code path (α=0 = exact standard-MeZO control), held-out
-      eval loss, paired per-seed, proper small-sample t-CIs, logs BOTH eval loss and
-      the paper's original train-estimate metric.
+      eval loss, paired per-seed, proper small-sample t-CIs.
 
-      PROVISIONAL (smoke: 2 seeds × 8 steps, gpt2/Alpaca, Colab):
-        α=−0.3 eval 5.3069 | α=0 eval 5.3148 | α=+0.7 eval 5.3117
-        → α=−0.3 is −0.15% vs standard on HELD-OUT EVAL LOSS.
-        → Direction matches paper (−0.3 best), but magnitude is ~180× smaller
-          than the claimed −18.6%.
-      HYPOTHESIS: the −18.6% lives in the noisy in-sample train-estimate
-        (L⁺+L⁻)/2 (single seed), not in generalization. Full 5-seed/100-step run
-        in progress to confirm. Likely outcome: "direction-only, magnitude refuted."
+      RESULT (full: 5 seeds × 100 steps, gpt2/Alpaca, Colab, 2599s):
+        held-out eval loss (mean ± 95% t-CI):
+          α=−0.3: 6.7494 ± 0.0194
+          α= 0.0: 6.7599 ± 0.0441   (standard MeZO control)
+          α=+0.7: 6.7692 ± 0.0432
+        α=−0.3 vs standard = **−0.16%** (claim was −18.6% → off by ~120×).
+        Paired diff = −0.0105 ± 0.0585, t=−0.50 (need 2.776) → NOT significant.
+        Only **2/5 seeds** favored α=−0.3. The three settings are statistically
+        indistinguishable at n=5.
+      TAKEAWAY: inverse error-shaping gives no measurable generalization benefit
+        here. Means are weakly monotonic in the paper's predicted direction, but
+        noise-dominated. The original −18.6% almost certainly came from a single
+        seed on the in-sample train estimate (L⁺+L⁻)/2, not held-out eval.
+      Raw + corrected verdict saved: `benchmark/figmezo_v2_results.json`.
+      OPTIONAL follow-up: re-run corrected script (logs train_est) to demonstrate
+        the −18.6% appears in the train estimate but vanishes on eval.
 - [ ] P2: Reproduce FigQuant 156/156 on TinyLlama locally; save results JSON.
 - [ ] P3: Implement the Memory Fabric gate fix (decoupled lr param groups + B-init) that the
       README already claims, then run the synthetic gate-open test to confirm "3 steps".

@@ -1,0 +1,28 @@
+{
+  "claim_pct": -18.6,
+  "found_pct_eval_vs_standard": -0.155,
+  "means_eval": {
+    "-0.3": 6.7494,
+    "0.0": 6.7599,
+    "+0.7": 6.7692
+  },
+  "paired_neg03_vs_std": {
+    "mean_diff": -0.0105,
+    "ci95": 0.05852,
+    "t_stat": -0.498,
+    "t_crit_dof4": 2.776,
+    "significant": false,
+    "seeds_favoring_neg03": "2/5"
+  },
+  "verdict": "REFUTED as stated: -18.6% not reproduced; observed -0.16% on held-out eval, statistically indistinguishable from standard MeZO at n=5 (paired CI includes 0). Weak monotonic hint in the paper's predicted direction, but noise-dominated.",
+  "config": {
+    "model": "gpt2",
+    "dataset": "alpaca",
+    "steps": 100,
+    "seeds": 5,
+    "lr": 1e-05,
+    "epsilon": 0.001,
+    "metric": "held-out eval loss (unperturbed)",
+    "runtime_s": 2599.0
+  }
+}
