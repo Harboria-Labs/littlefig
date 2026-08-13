@@ -1,0 +1,19 @@
+﻿{
+    "gpt2":  {
+                 "model":  "gpt2",
+                 "n_layers":  50,
+                 "fq_wins_vs_nf4":  50,
+                 "win_fraction":  "50/50",
+                 "mse_reduction_vs_nf4_pct":  5.280921036012125,
+                 "mse_reduction_vs_absmax_pct":  57.02777944652189,
+                 "snr_gain_vs_nf4_db":  0.21298907247301457,
+                 "n_losers":  0,
+                 "_verdict":  "REPRODUCED [harness self-check: MATCH]"
+             },
+    "_config":  {
+                    "group_size":  128,
+                    "n_iters":  8,
+                    "metric":  "per-layer reconstruction MSE",
+                    "scope":  "partial P2 result; TinyLlama not included"
+                }
+}

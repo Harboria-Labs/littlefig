@@ -1,6 +1,6 @@
 # Little Fig — Research Progress Tracker
 
-_Maintained by the research effort. Last updated: 2026-08-06._
+_Maintained by the research effort. Last updated: 2026-08-13._
 
 This file tracks the state of the Harboria Labs AI Memory Stack research: what each
 paper claims, what is actually proven in code, and the plan to (1) verify/prove the
@@ -108,8 +108,14 @@ Status key: ✅ proven · 🟡 partial · ❌ unproven/contradicted · ⏳ not s
       Raw + corrected verdict saved: `benchmark/figmezo_v2_results.json`.
       OPTIONAL follow-up: re-run corrected script (logs train_est) to demonstrate
         the −18.6% appears in the train estimate but vanishes on eval.
-- [ ] P2: Reproduce FigQuant 156/156 on TinyLlama locally; save results JSON.
-      **Harness ready, awaiting Colab data.** Script: `benchmark/experiment_figquant_v2.py`
+- [ ] P2: Reproduce FigQuant 156/156 on TinyLlama in Colab; save results JSON.
+      **PARTIAL RESULT: GPT-2 reproduced; awaiting TinyLlama data.**
+      GPT-2 Colab self-check (2026-08-13): FigQuant won **50/50** matrices and
+      reduced mean reconstruction MSE by **5.280921%** vs NF4, matching the
+      committed result. This validates the harness and proves the GPT-2 half of
+      the paper claim. The pasted output came from notebook cell 4 (`--models gpt2`)
+      and contains no TinyLlama entry; the **156/156 TinyLlama** claim remains open.
+      Script: `benchmark/experiment_figquant_v2.py`
       + self-contained `benchmark/P2_FigQuant_Colab.ipynb`. Tests the SHIPPED
       `figquant_quantize` (group_size=128, n_iters=8), reproduces GPT-2 50/50 as a
       harness self-check vs committed `v05_results.json`, then runs the missing
@@ -136,4 +142,7 @@ Status key: ✅ proven · 🟡 partial · ❌ unproven/contradicted · ⏳ not s
 ---
 
 ## Open log
+- 2026-08-13 - P2 GPT-2 harness self-check reproduced 50/50 wins and 5.280921%
+  lower MSE vs NF4. TinyLlama 156/156 result still pending.
+
 - 2026-08-06 — Initial codebase + 4-paper review. Found contradictions #1–#4 above.
