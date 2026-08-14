@@ -59,6 +59,14 @@ GPT2_REF = {"n_layers": 50, "fq_wins": 50, "mse_reduction_vs_nf4_pct": 5.2809199
 def log(msg):
     print(f"[P2] {msg}", flush=True)
 
+def rss_gb():
+    """Best-effort process RSS for Colab progress diagnostics."""
+    try:
+        import psutil
+        return psutil.Process(os.getpid()).memory_info().rss / (1024 ** 3)
+    except ImportError:
+        return float("nan")
+
 
 # ── Baselines: byte-identical to tests/test_v05.py (same NF4 quantiles, same scaling) ──
 def _nf4_quantize_dequantize(tensor: torch.Tensor, group_size: int = 128) -> torch.Tensor:
@@ -143,8 +151,12 @@ def run_model(model_id, weights):
     fq_wins = 0
     reductions = []          # per-layer % MSE reduction of FigQuant vs NF4 (+ = better)
     losers = []              # layers where FigQuant did NOT beat NF4
+    total = len(weights)
     while weights:
         name, W = weights.pop()          # smallest remaining first (list is desc-sorted), then freed
+        layer_numel = W.numel()
+        layer_started = time.time()
+        log(f"  [{n + 1}/{total}] START {name} ({layer_numel:,} params) | RSS {rss_gb():.2f} GB")
         q_fq = figquant_quantize(W, group_size=GROUP_SIZE, n_iters=N_ITERS)
         qual_fq = measure_quality(W, q_fq)
         qual_nf4 = _measure_quality_raw(W, _nf4_quantize_dequantize(W, GROUP_SIZE))
@@ -162,8 +174,10 @@ def run_model(model_id, weights):
         else:
             losers.append({"layer": name, "reduction_pct": red})
         n += 1
-        del W, q_fq
+        del W, q_fq, qual_fq, qual_nf4, qual_abs
         gc.collect()
+        log(f"  [{n}/{total}] DONE  {name} | FigQuant vs NF4 {red:+.2f}% | "
+            f"{time.time() - layer_started:.1f}s | RSS {rss_gb():.2f} GB")
 
     avgs = {m: {k: v / n for k, v in tot[m].items()} for m in tot}
     mse_red = (avgs["nf4"]["mse"] - avgs["figquant"]["mse"]) / avgs["nf4"]["mse"] * 100
