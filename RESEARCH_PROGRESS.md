@@ -1,6 +1,6 @@
 # Little Fig — Research Progress Tracker
 
-_Maintained by the research effort. Last updated: 2026-08-13._
+_Maintained by the research effort. Last updated: 2026-08-14._
 
 This file tracks the state of the Harboria Labs AI Memory Stack research: what each
 paper claims, what is actually proven in code, and the plan to (1) verify/prove the
@@ -125,6 +125,18 @@ Status key: ✅ proven · 🟡 partial · ❌ unproven/contradicted · ⏳ not s
       Note: FigQuant = "NF4 init + per-layer k-means"; k-means provably lowers
       *normalized* distortion, but the metric is *reconstruction* MSE (reweighted by
       per-group scale²), so all-156-wins is a real empirical result, not a tautology.
+      Recovery: user observed 154 completed TinyLlama wins. The run then printed
+      `[155/156] START lm_head.weight` followed by `^C`, so neither 65.5M-parameter
+      matrix completed. The old run had no checkpoint, so its 154 metrics are not
+      recoverable from console text. The benchmark now checkpoints each layer atomically, supports
+      `--resume`, writes to Drive via `--results-path`, and bounds k-means/NF4/INT4
+      distance tensors to avoid the former ~3.9 GiB final-layer allocation.
+      Memory evidence now includes sampled process peak RSS, per-layer workspace
+      peaks, system available-memory floor, the peak layer, and pass/fail plus
+      headroom against an explicit 8 GiB budget. A Drive heartbeat survives a kill
+      during an unfinished layer. Scope warning: this measures the P2 quantization
+      benchmark, not end-to-end fine-tuning; the repository's broader 8 GB training
+      claim still needs a separate full-pipeline measurement.
 - [ ] P3: Implement the Memory Fabric gate fix (decoupled lr param groups + B-init) that the
       README already claims, then run the synthetic gate-open test to confirm "3 steps".
 - [ ] P4: Run Memory Fabric Stage 3 — write N facts into TinyLlama weights, measure
@@ -142,6 +154,14 @@ Status key: ✅ proven · 🟡 partial · ❌ unproven/contradicted · ⏳ not s
 ---
 
 ## Open log
+- 2026-08-14 - Added resumable Drive-backed P2 workflow and bounded-memory final
+  layer calculations after the corrected 154/156 TinyLlama partial run. The old run
+  stopped at `[155/156] START lm_head.weight` with `^C`.
+  Added explicit 8 GiB budget evaluation and durable in-layer memory heartbeat.
+  Removed the obsolete P1 testing notebook; the P2 resumable notebook is now the
+  only benchmark notebook, while the root Little Fig notebook remains untouched.
+  Full handoff: `SESSION_SUMMARY.md`.
+
 - 2026-08-13 - P2 GPT-2 harness self-check reproduced 50/50 wins and 5.280921%
   lower MSE vs NF4. TinyLlama 156/156 result still pending.
 

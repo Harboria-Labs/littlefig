@@ -76,6 +76,7 @@ def figquant_quantize(
     n_iters: int = 8,
     sensitivity_weight: bool = False,
     double_quant: bool = True,
+    kmeans_batch_size: int = 1_048_576,
 ) -> FigQuantTensor:
     """
     Quantize a tensor using FigQuant (adaptive codebook INT4).
@@ -117,16 +118,19 @@ def figquant_quantize(
         all_weights = torch.ones_like(all_vals)
 
     for _ in range(n_iters):
-        # Assign each value to nearest codebook entry: [total]
-        dists = (all_vals.unsqueeze(1) - codebook.unsqueeze(0)).abs()  # [total, 16]
-        assignments = dists.argmin(dim=1)  # [total]
-
-        # Update codebook entries via scatter (fully vectorized, no Python loop)
-        weighted_vals = all_vals * all_weights   # [total]
+        # Accumulate assignments in bounded chunks. The previous fully-vectorized
+        # [numel, 16] distance tensor exceeded free Colab RAM on TinyLlama's
+        # 65.5M-parameter embedding matrix (about 3.9 GiB for distances alone).
         new_sums = torch.zeros(16, dtype=torch.float32)
         new_weights = torch.zeros(16, dtype=torch.float32)
-        new_sums.scatter_add_(0, assignments, weighted_vals)
-        new_weights.scatter_add_(0, assignments, all_weights)
+        for start in range(0, all_vals.numel(), kmeans_batch_size):
+            end = min(start + kmeans_batch_size, all_vals.numel())
+            values = all_vals[start:end]
+            weights = all_weights[start:end]
+            dists = (values.unsqueeze(1) - codebook.unsqueeze(0)).abs()
+            assignments = dists.argmin(dim=1)
+            new_sums.scatter_add_(0, assignments, values * weights)
+            new_weights.scatter_add_(0, assignments, weights)
 
         # Update only entries that have assignments
         mask = new_weights > 0
