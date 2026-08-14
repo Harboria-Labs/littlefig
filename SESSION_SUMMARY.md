@@ -84,18 +84,17 @@ unproven/failed for this current extraction benchmark.
 
 ## Exact next steps
 
-1. Commit and push the current branch so Colab can clone the updated script. The
-   notebook intentionally clones `research/p1-figmezo-verify`.
-2. Open `benchmark/P2_FigQuant_Colab.ipynb` in Colab and run all cells.
-3. Leave `RESUME = True`. On first run it starts a new Drive checkpoint; after any
-   interruption, rerun setup/benchmark cells and completed layers are skipped.
-4. Confirm Drive contains `littlefig-p2/figquant_v2_checkpoint_TinyLlama_TinyLlama-1.1B-Chat-v1.0.json`.
-5. When complete, retrieve `littlefig-p2/figquant_v2_results.json`, commit it under
-   `benchmark/`, and update P2 with exact 156-layer numbers.
+1. Treat P2 FigQuant quality verification as complete; the result JSON and exact
+   156-layer metrics are committed under `benchmark/`.
+2. Reduce the **8.668636 GiB** load/extraction peak below 8 GiB. The likely route
+   is streaming tensors from safetensors or the model one matrix at a time instead
+   of retaining cloned FP32 matrices for the whole model.
+3. Re-run the memory benchmark after that change and preserve the distinction
+   between load/extraction peak, quantization peak, and full training peak.
+4. After the memory work, proceed to P3 Memory Fabric unless priorities change.
 
-## Verification required
+## Remaining verification
 
-- Run synthetic stop/resume and unit tests locally.
-- Re-run GPT-2 with chunked code and compare against the committed 50/50,
-  5.280921% reference within tolerance.
-- Keep the TinyLlama verdict partial until all 156 records are present.
+- Demonstrate an end-to-end P2 run below the explicit 8 GiB RSS budget.
+- Benchmark the full training pipeline separately; P2 only measures model
+  loading/extraction and quantization-quality evaluation.

@@ -118,8 +118,8 @@ Status key: ✅ proven · 🟡 partial · ❌ unproven/contradicted · ⏳ not s
       GPT-2 Colab self-check (2026-08-13): FigQuant won **50/50** matrices and
       reduced mean reconstruction MSE by **5.280921%** vs NF4, matching the
       committed result. This validates the harness and proves the GPT-2 half of
-      the paper claim. The pasted output came from notebook cell 4 (`--models gpt2`)
-      and contains no TinyLlama entry; the **156/156 TinyLlama** claim remains open.
+      the paper claim. The later completed Drive-backed run supplies the matching
+      **156/156 TinyLlama** result recorded above.
       Script: `benchmark/experiment_figquant_v2.py`
       + self-contained `benchmark/P2_FigQuant_Colab.ipynb`. Tests the SHIPPED
       `figquant_quantize` (group_size=128, n_iters=8), reproduces GPT-2 50/50 as a
