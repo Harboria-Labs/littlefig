@@ -135,18 +135,16 @@ Status key: ✅ proven · 🟡 partial · ❌ unproven/contradicted · ⏳ not s
       completed all 156 layers and saved the complete JSON. The benchmark checkpoints each layer atomically, supports
       `--resume`, writes to Drive via `--results-path`, and bounds k-means/NF4/INT4
       distance tensors to avoid the former ~3.9 GiB final-layer allocation.
-      Memory evidence now includes sampled process peak RSS, per-layer workspace
-      peaks, system available-memory floor, the peak layer, and pass/fail plus
-      headroom against an explicit 8 GiB budget. A Drive heartbeat survives a kill
-      during an unfinished layer. Scope warning: this measures the P2 quantization
-      benchmark, not end-to-end fine-tuning; the repository's broader 8 GB training
-      claim still needs a separate full-pipeline measurement.
-      Completed-run memory: model load/extraction peak **8.668636 GiB** RSS, so it
-      exceeds the explicit 8 GiB target by **0.668636 GiB** (108.36% utilization).
-      Quantization-only peak was **4.932980 GiB** RSS; system available-memory floor
-      on the 12.671 GiB Colab host was **1.115830 GiB**. Therefore the FigQuant
-      quality claim is reproduced, but the broader 8 GB end-to-end memory objective
-      remains open.
+      Memory evidence includes sampled process RSS, per-layer workspace peaks,
+      system available-memory floor, and a durable in-layer heartbeat. The completed
+      run's **8.668636 GiB** collection peak is a harness artifact: `collect_weights`
+      retained the full **4.098 GiB** FP32 HF model while accumulating another
+      **4.098 GiB** of FP32 clones. It does not test or refute Fig Engine's training
+      memory claim. Quantization itself peaked at **4.932980 GiB** RSS. The harness
+      now releases each source parameter after cloning it; a new run is needed to
+      measure the corrected collection peak. `FigModel.from_pretrained()` is a
+      different code path and its end-to-end training peak remains independently
+      unverified.
 - [ ] P3: Implement the Memory Fabric gate fix (decoupled lr param groups + B-init) that the
       README already claims, then run the synthetic gate-open test to confirm "3 steps".
 - [ ] P4: Run Memory Fabric Stage 3 — write N facts into TinyLlama weights, measure

@@ -18,6 +18,9 @@
       "absmax": {"cos": 0.9935967746453408, "mse": 8.93811365005767e-06, "snr": 18.65073064437906}
     },
     "memory_proof": {
+      "scope": "P2 quantization-quality harness; not FigModel training",
+      "collection_method": "legacy clone-all collection retained the full fp32 model and all selected fp32 clones simultaneously",
+      "interpretation": "The 8.668636 GiB peak diagnoses harness double-buffering and is not evidence about FigModel.from_pretrained or end-to-end training memory.",
       "total_model_params": 1100048384,
       "total_model_fp32_gib": 4.097999572753906,
       "selected_matrix_params": 1099956224,

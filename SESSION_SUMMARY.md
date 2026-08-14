@@ -76,25 +76,27 @@ The new Drive-backed run completed all **156/156** TinyLlama matrices:
 - SNR gain: **0.252763 dB**; losers: **0**; runtime: **1214.2 s**.
 - Verdict: **REPRODUCED** for the FigQuant quality claim.
 
-Memory result is separate: model load/extraction peaked at **8.668636 GiB** RSS,
-which misses the 8 GiB target by **0.668636 GiB**. Quantization-only peak was
-**4.932980 GiB** RSS. The 12.671 GiB host's available-memory floor was **1.115830
-GiB**. Thus quality is reproduced, but the broader 8 GB memory objective remains
-unproven/failed for this current extraction benchmark.
+Memory result is separate: the **8.668636 GiB** collection peak came from a P2
+harness bug. `collect_weights()` held the full **4.098 GiB** FP32 model while also
+building **4.098 GiB** of FP32 clones. This number is not evidence for or against
+Fig Engine's production training-memory claim. Quantization-only peak was
+**4.932980 GiB** RSS. The harness now releases each source parameter immediately
+after cloning it; the corrected collection peak still needs a new run. The actual
+`FigModel.from_pretrained()` plus training path remains independently unmeasured.
 
 ## Exact next steps
 
 1. Treat P2 FigQuant quality verification as complete; the result JSON and exact
    156-layer metrics are committed under `benchmark/`.
-2. Reduce the **8.668636 GiB** load/extraction peak below 8 GiB. The likely route
-   is streaming tensors from safetensors or the model one matrix at a time instead
-   of retaining cloned FP32 matrices for the whole model.
-3. Re-run the memory benchmark after that change and preserve the distinction
-   between load/extraction peak, quantization peak, and full training peak.
+2. Re-run P2 once with the corrected release-as-you-go collector and record its
+   collection peak separately from the already-proven quality result.
+3. Benchmark `FigModel.from_pretrained()` and a representative training step as a
+   separate experiment, preserving the distinction between load/extraction peak,
+   quantization peak, and full training peak.
 4. After the memory work, proceed to P3 Memory Fabric unless priorities change.
 
 ## Remaining verification
 
-- Demonstrate an end-to-end P2 run below the explicit 8 GiB RSS budget.
-- Benchmark the full training pipeline separately; P2 only measures model
-  loading/extraction and quantization-quality evaluation.
+- Measure the corrected P2 collector; the legacy 8.668636 GiB number is invalid for
+  assessing Fig Engine memory efficiency.
+- Benchmark the full production training pipeline separately.

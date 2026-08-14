@@ -271,9 +271,12 @@ def _measure_quality_raw(original: torch.Tensor, dequantized: torch.Tensor) -> d
 
 def collect_weights(model_id, heartbeat_path=None):
     """Load model, extract all 2D weight matrices (numel>=MIN_NUMEL) as fp32 CPU
-    tensors, free the HF model, and return them largest-first so that run_model's
-    pop() processes them SMALLEST-first (the two huge embed/lm_head matrices last),
-    which keeps peak RAM low."""
+    tensors, releasing each source parameter as soon as its clone is durable.
+
+    Keeping the complete HF model alive while cloning every selected matrix
+    double-buffers almost the entire model. Releasing source storage as we go keeps
+    collection near one model's worth of weights plus one transient matrix.
+    """
     from transformers import AutoModelForCausalLM
     collection_monitor = PeakRSSMonitor(
         heartbeat_path=heartbeat_path, phase=f'collect:{model_id}'
@@ -288,6 +291,9 @@ def collect_weights(model_id, heartbeat_path=None):
     for name, p in model.named_parameters():
         if p.ndim == 2 and p.numel() >= MIN_NUMEL:
             weights.append((name, p.data.detach().float().cpu().clone()))
+            # The module is never used after extraction, so do not retain the
+            # equivalent source storage alongside the durable correctness clone.
+            p.data = torch.empty(0, dtype=p.dtype, device=p.device)
     del model
     gc.collect()
     collection_monitor.__exit__(None, None, None)
@@ -558,6 +564,8 @@ def run_model_resumable(
         'losers': losers[:10],
         'averages': averages,
         'memory_proof': {
+            'scope': 'P2 quantization-quality harness; not FigModel training',
+            'collection_method': 'release source parameter storage after each clone',
             'total_model_params': collection_stats['total_model_params'],
             'total_model_fp32_gib': collection_stats['total_model_fp32_gib'],
             'selected_matrix_params': collection_stats['selected_matrix_params'],
