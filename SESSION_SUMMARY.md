@@ -88,15 +88,16 @@ after cloning it; the corrected collection peak still needs a new run. The actua
 
 1. Treat P2 FigQuant quality verification as complete; the result JSON and exact
    156-layer metrics are committed under `benchmark/`.
-2. Re-run P2 once with the corrected release-as-you-go collector and record its
-   collection peak separately from the already-proven quality result.
-3. Benchmark `FigModel.from_pretrained()` and a representative training step as a
-   separate experiment, preserving the distinction between load/extraction peak,
-   quantization peak, and full training peak.
-4. After the memory work, proceed to P3 Memory Fabric unless priorities change.
+2. Run `benchmark/P3_8GB_Colab.ipynb` with `MEMORY_MODE = 'lowram'`, the mode
+   relevant to the minimum-memory Tier-1 claim.
+3. Compare absolute peak RSS with 8 GiB and incremental peak RSS with the paper's
+   ~400 MB estimate. Preserve the load/quantize, dataset, and training phase split.
+4. If necessary, repeat with `figcache` and `fast` to identify cache tradeoffs.
+5. After P3, proceed to P4 Memory Fabric unless priorities change.
 
 ## Remaining verification
 
-- Measure the corrected P2 collector; the legacy 8.668636 GiB number is invalid for
-  assessing Fig Engine memory efficiency.
-- Benchmark the full production training pipeline separately.
+- Run P3 on TinyLlama. Local smoke could not pass model loading because this local
+  environment does not have `transformers` installed.
+- Re-measure the corrected P2 collector only if a new harness-specific number is
+  useful; it is not required to decide the production training claim.

@@ -145,11 +145,18 @@ Status key: ✅ proven · 🟡 partial · ❌ unproven/contradicted · ⏳ not s
       measure the corrected collection peak. `FigModel.from_pretrained()` is a
       different code path and its end-to-end training peak remains independently
       unverified.
-- [ ] P3: Implement the Memory Fabric gate fix (decoupled lr param groups + B-init) that the
+- [ ] P3: Measure Fig Engine Tier-1 memory on the real TinyLlama training path.
+      Script: `benchmark/experiment_8gb_v1.py`; Colab: `benchmark/P3_8GB_Colab.ipynb`.
+      It records absolute process RSS against the 8 GiB budget and incremental RSS
+      over startup against the paper's ~400 MB estimate. Default mode is `lowram`;
+      `fast` caches full FP32 dequantized target weights and is not the minimum-memory
+      claim. `FigModel.from_pretrained()` also builds all replacements before applying
+      them, while embeddings/lm_head remain FP32. These are the main suspects.
+- [ ] P4: Implement the Memory Fabric gate fix (decoupled lr param groups + B-init) that the
       README already claims, then run the synthetic gate-open test to confirm "3 steps".
-- [ ] P4: Run Memory Fabric Stage 3 — write N facts into TinyLlama weights, measure
+- [ ] P5: Run Memory Fabric Stage 3 — write N facts into TinyLlama weights, measure
       cross-session recall vs (a) RAG baseline, (b) in-context baseline.
-- [ ] P5: Run CogMemBench full 1,000 cases against ≥3 frontier models via Kaggle; get real
+- [ ] P6: Run CogMemBench full 1,000 cases against ≥3 frontier models via Kaggle; get real
       discrimination data (goal #2).
 
 ### Phase 2 — Advance (after verification)
@@ -162,6 +169,11 @@ Status key: ✅ proven · 🟡 partial · ❌ unproven/contradicted · ⏳ not s
 ---
 
 ## Open log
+- 2026-08-14 - Added P3 real-path memory benchmark and Drive-backed Colab wrapper.
+  The ~400 MB estimate is evaluated as incremental RSS; the 8 GiB requirement uses
+  absolute process RSS. The test defaults to lowram mode and an exact-step local
+  dataset. Local smoke reached model loading but the environment lacks transformers;
+  the Colab wrapper installs project dependencies before running.
 - 2026-08-14 - Added resumable Drive-backed P2 workflow and bounded-memory final
   layer calculations after the corrected 154/156 TinyLlama partial run. The old run
   stopped at `[155/156] START lm_head.weight` with `^C`.
