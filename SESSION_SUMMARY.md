@@ -66,6 +66,22 @@ Notebook cleanup: the obsolete `benchmark/P1_FigMeZO_Colab.ipynb` testing notebo
 was deleted. Keep `Little_Fig_Colab.ipynb` as the public/main usage notebook and
 `benchmark/P2_FigQuant_Colab.ipynb` as the sole research-testing notebook.
 
+## Completed P2 result (2026-08-14)
+
+The new Drive-backed run completed all **156/156** TinyLlama matrices:
+
+- Mean reconstruction MSE: FigQuant `5.6419278e-6`; NF4 `5.9652037e-6`.
+- FigQuant reduction vs NF4: **5.419361%**; vs absmax INT4: **36.877870%**.
+- Per-layer reduction: min **2.498559%**, median **5.743715%**, max **21.691531%**.
+- SNR gain: **0.252763 dB**; losers: **0**; runtime: **1214.2 s**.
+- Verdict: **REPRODUCED** for the FigQuant quality claim.
+
+Memory result is separate: model load/extraction peaked at **8.668636 GiB** RSS,
+which misses the 8 GiB target by **0.668636 GiB**. Quantization-only peak was
+**4.932980 GiB** RSS. The 12.671 GiB host's available-memory floor was **1.115830
+GiB**. Thus quality is reproduced, but the broader 8 GB memory objective remains
+unproven/failed for this current extraction benchmark.
+
 ## Exact next steps
 
 1. Commit and push the current branch so Colab can clone the updated script. The

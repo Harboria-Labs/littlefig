@@ -1,0 +1,58 @@
+{
+  "TinyLlama/TinyLlama-1.1B-Chat-v1.0": {
+    "model": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+    "n_layers": 156,
+    "fq_wins_vs_nf4": 156,
+    "win_fraction": "156/156",
+    "mse_reduction_vs_nf4_pct": 5.419361225268954,
+    "mse_reduction_vs_absmax_pct": 36.87786954460863,
+    "snr_gain_vs_nf4_db": 0.25276323535958056,
+    "per_layer_reduction_min_pct": 2.498559130579847,
+    "per_layer_reduction_median_pct": 5.743715019596214,
+    "per_layer_reduction_max_pct": 21.69153055375721,
+    "n_losers": 0,
+    "losers": [],
+    "averages": {
+      "figquant": {"cos": 0.9955725356554374, "mse": 5.641927758440546e-06, "snr": 20.400272343395017},
+      "nf4": {"cos": 0.9952694353384849, "mse": 5.965203694466791e-06, "snr": 20.147509108035436},
+      "absmax": {"cos": 0.9935967746453408, "mse": 8.93811365005767e-06, "snr": 18.65073064437906}
+    },
+    "memory_proof": {
+      "total_model_params": 1100048384,
+      "total_model_fp32_gib": 4.097999572753906,
+      "selected_matrix_params": 1099956224,
+      "selected_matrix_fp32_gib": 4.09765625,
+      "largest_matrix": "model.embed_tokens.weight",
+      "largest_matrix_params": 65536000,
+      "largest_matrix_fp32_mib": 250.0,
+      "collection_peak_rss_gb": 8.668636322021484,
+      "quantization_peak_rss_gb": 4.932979583740234,
+      "run_peak_rss_gb": 8.668636322021484,
+      "run_peak_rss_gib": 8.668636322021484,
+      "peak_layer": "model.layers.21.self_attn.o_proj.weight",
+      "peak_layer_rss_gib": 4.932979583740234,
+      "max_layer_workspace_delta_gb": 1.5060195922851562,
+      "system_total_gib": 12.671417236328125,
+      "system_available_min_gib": 1.1158294677734375,
+      "memory_budget_gib": 8.0,
+      "within_memory_budget": false,
+      "budget_headroom_gib": -0.6686363220214844,
+      "budget_utilization_pct": 108.35795402526855,
+      "rss_sampling_interval_s": 0.05
+    },
+    "_verdict": "REPRODUCED"
+  },
+  "_config": {
+    "group_size": 128,
+    "n_iters": 8,
+    "min_numel": 1024,
+    "metric": "per-layer reconstruction MSE (dequantized vs fp32)",
+    "deterministic": true,
+    "seeds": "n/a (single deterministic run)",
+    "rss_sampling_interval_s": 0.05,
+    "resume_enabled": true,
+    "memory_budget_gib": 8.0,
+    "torch": "2.11.0+cpu",
+    "runtime_s": 1214.2
+  }
+}

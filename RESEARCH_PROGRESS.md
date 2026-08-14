@@ -33,7 +33,7 @@ Status key: ✅ proven · 🟡 partial · ❌ unproven/contradicted · ⏳ not s
 
 | Claim | Paper number | Code reality | Status |
 |---|---|---|---|
-| FigQuant beats NF4 on MSE | −5.3% MSE, wins 50/50 GPT-2, 156/156 TinyLlama | `figquant.py` real; `v05_results.json` shows −5.28% MSE, 50/50 wins on GPT-2 | 🟡 GPT-2 reproduced locally; TinyLlama 156/156 not in local results |
+| FigQuant beats NF4 on MSE | −5.3% MSE, wins 50/50 GPT-2, 156/156 TinyLlama | GPT-2 reproduced 50/50 at 5.280921%; TinyLlama reproduced 156/156 at 5.419361% | ✅ Reproduced on both models; complete TinyLlama JSON committed |
 | FigMeZO inverse shaping | −18.6% loss @ α=−0.3, 3 seeds | `figmezo.py` implements α=−0.3 default. **BUT committed `experiment_figmezo.py` only tests α=+0.7 and +1.0 — never runs −0.3** | ❌ Headline experiment does not test the headline claim |
 | Sensitivity-guided LISA | −10% vs random LISA | `lisa.py` present | ⏳ Not re-run; single-seed in paper |
 | Shared codebook | 5× faster load, +3.1% MSE | logic present | ⏳ Not re-run |
@@ -108,8 +108,13 @@ Status key: ✅ proven · 🟡 partial · ❌ unproven/contradicted · ⏳ not s
       Raw + corrected verdict saved: `benchmark/figmezo_v2_results.json`.
       OPTIONAL follow-up: re-run corrected script (logs train_est) to demonstrate
         the −18.6% appears in the train estimate but vanishes on eval.
-- [ ] P2: Reproduce FigQuant 156/156 on TinyLlama in Colab; save results JSON.
-      **PARTIAL RESULT: GPT-2 reproduced; awaiting TinyLlama data.**
+- [x] P2: Reproduce FigQuant 156/156 on TinyLlama in Colab; save results JSON.
+      **RESULT: REPRODUCED.** TinyLlama completed **156/156** wins. Mean
+      reconstruction MSE reduction vs NF4: **5.419361%** (NF4 5.9652037e-6 ->
+      FigQuant 5.6419278e-6); vs absmax INT4: **36.877870%**. Per-layer reduction
+      min **2.498559%**, median **5.743715%**, max **21.691531%**; SNR gain
+      **0.252763 dB**; losers **0**. Runtime **1214.2 s**. This exactly closes
+      the missing TinyLlama evidence gap for the FigQuant quality claim.
       GPT-2 Colab self-check (2026-08-13): FigQuant won **50/50** matrices and
       reduced mean reconstruction MSE by **5.280921%** vs NF4, matching the
       committed result. This validates the harness and proves the GPT-2 half of
@@ -125,10 +130,9 @@ Status key: ✅ proven · 🟡 partial · ❌ unproven/contradicted · ⏳ not s
       Note: FigQuant = "NF4 init + per-layer k-means"; k-means provably lowers
       *normalized* distortion, but the metric is *reconstruction* MSE (reweighted by
       per-group scale²), so all-156-wins is a real empirical result, not a tautology.
-      Recovery: user observed 154 completed TinyLlama wins. The run then printed
-      `[155/156] START lm_head.weight` followed by `^C`, so neither 65.5M-parameter
-      matrix completed. The old run had no checkpoint, so its 154 metrics are not
-      recoverable from console text. The benchmark now checkpoints each layer atomically, supports
+      Recovery history: an earlier old-script run stopped at `[155/156] START
+      lm_head.weight` with `^C`; it had no checkpoint. The new Drive-backed run
+      completed all 156 layers and saved the complete JSON. The benchmark checkpoints each layer atomically, supports
       `--resume`, writes to Drive via `--results-path`, and bounds k-means/NF4/INT4
       distance tensors to avoid the former ~3.9 GiB final-layer allocation.
       Memory evidence now includes sampled process peak RSS, per-layer workspace
@@ -137,6 +141,12 @@ Status key: ✅ proven · 🟡 partial · ❌ unproven/contradicted · ⏳ not s
       during an unfinished layer. Scope warning: this measures the P2 quantization
       benchmark, not end-to-end fine-tuning; the repository's broader 8 GB training
       claim still needs a separate full-pipeline measurement.
+      Completed-run memory: model load/extraction peak **8.668636 GiB** RSS, so it
+      exceeds the explicit 8 GiB target by **0.668636 GiB** (108.36% utilization).
+      Quantization-only peak was **4.932980 GiB** RSS; system available-memory floor
+      on the 12.671 GiB Colab host was **1.115830 GiB**. Therefore the FigQuant
+      quality claim is reproduced, but the broader 8 GB end-to-end memory objective
+      remains open.
 - [ ] P3: Implement the Memory Fabric gate fix (decoupled lr param groups + B-init) that the
       README already claims, then run the synthetic gate-open test to confirm "3 steps".
 - [ ] P4: Run Memory Fabric Stage 3 — write N facts into TinyLlama weights, measure
