@@ -171,6 +171,13 @@ Status key: ✅ proven · 🟡 partial · ❌ unproven/contradicted · ⏳ not s
       indices to int64 and materializes an FP32 weight. The 6.811 GiB post-training
       RSS is consistent with retained workspaces, but activation/checkpoint and
       allocator contributions require finer instrumentation before assigning cause.
+- [ ] P3a: Isolate lowram dequantization allocator retention before another full
+      training run. `benchmark/experiment_lowram_allocator_v1.py` exercises the
+      shipped `FigLinear` path using exact TinyLlama q_proj and MLP matrix shapes,
+      with no model loader, trainer, optimizer, dataset, or checkpointing. Record
+      per-iteration RSS at start/forward/backward/GC and compare before/after Linux
+      `malloc_trim(0)`. Steady single-layer growth implicates the lowram path;
+      trim-released RSS identifies allocator cache rather than live tensors.
 - [ ] P4: Implement the Memory Fabric gate fix (decoupled lr param groups + B-init) that the
       README already claims, then run the synthetic gate-open test to confirm "3 steps".
 - [ ] P5: Run Memory Fabric Stage 3 — write N facts into TinyLlama weights, measure

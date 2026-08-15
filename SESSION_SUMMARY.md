@@ -7,8 +7,8 @@ resuming work, and append a dated entry after each substantive session.
 
 ## Current objective
 
-P2 and P3 verification are complete. Proceed to P4 unless the user requests a
-follow-up memory-mode comparison.
+P2 and P3 verification are complete. Run the cheap P3a isolated lowram allocator
+diagnostic before proceeding to P4.
 
 ## State at handoff
 
@@ -109,6 +109,9 @@ still needs finer per-step instrumentation.
 2. P3 completed in `lowram`: 7.340488 GiB absolute peak, 7.126644 GiB incremental.
    The 8 GiB budget passed; the ~400 MB estimate failed.
 3. Proceed to P4 Memory Fabric unless priorities change.
+4. Immediate diagnostic: run `benchmark/experiment_lowram_allocator_v1.py` in
+   Colab. It tests exact TinyLlama q_proj and MLP shapes without loading the model,
+   and distinguishes live growth from allocator-retained RSS with `malloc_trim(0)`.
 
 ## Remaining verification
 
