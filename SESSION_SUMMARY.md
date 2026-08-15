@@ -82,7 +82,25 @@ building **4.098 GiB** of FP32 clones. This number is not evidence for or agains
 Fig Engine's production training-memory claim. Quantization-only peak was
 **4.932980 GiB** RSS. The harness now releases each source parameter immediately
 after cloning it; the corrected collection peak still needs a new run. The actual
-`FigModel.from_pretrained()` plus training path remains independently unmeasured.
+`FigModel.from_pretrained()` plus training path was measured separately in P3 below.
+
+## Completed P3 result (2026-08-15)
+
+The real TinyLlama Tier-1 CPU path completed 20 lowram steps at batch 2 and sequence
+length 256. Peak RSS was **7.340488 GiB**, giving **0.659512 GiB** headroom against
+8 GiB. Incremental RSS above startup was **7.126644 GiB**, so the paper's ~400 MB
+estimate was not reproduced. Load/quantize peaked at 7.054710 GiB; training was the
+worst phase; post-training RSS remained 6.811050 GiB.
+
+Source audit rules out accidental full-model AdamW state. `model.py` freezes every
+non-LoRA parameter, and `trainer.py` passes only `requires_grad` parameters to
+AdamW. The 12,615,680 LoRA parameters need 48.13 MiB; parameters, gradients, and
+two FP32 moments total about 192.5 MiB. Embeddings and lm_head are frozen FP32
+storage, not optimizer state. The leading suspect for the unexplained training RSS
+is lowram dequantization: each FigLinear expands packed indices to int64 and creates
+a full FP32 weight in both forward and backward. Persistent 6.811 GiB RSS suggests
+CPU allocator retention, but saved-activation versus dequant-workspace attribution
+still needs finer per-step instrumentation.
 
 ## Exact next steps
 

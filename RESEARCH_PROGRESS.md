@@ -159,6 +159,18 @@ Status key: ✅ proven · 🟡 partial · ❌ unproven/contradicted · ⏳ not s
       7.340488 GiB and left 6.811050 GiB resident. This measures CPU process RSS
       for `FigModel.from_pretrained` plus Tier-1 training, not just packed weight
       storage (reported base weights were 522.3 MB).
+      Source audit after the run rules out full-model AdamW state: Tier 1 passes
+      `model.get_trainable_parameters()` to AdamW, which filters on
+      `requires_grad`, and model loading freezes every parameter whose name does
+      not contain `lora_`. The measured 12,615,680 LoRA parameters occupy 48.13
+      MiB; parameters + gradients + two FP32 AdamW moments total about 192.5 MiB.
+      Embeddings/lm_head remain FP32 storage but are frozen. Therefore the 4.356
+      GiB rise from training entry to peak is not explained by optimizer scope.
+      The leading source-level suspect is transient lowram dequantization plus CPU
+      allocator retention: every FigLinear forward and backward expands packed
+      indices to int64 and materializes an FP32 weight. The 6.811 GiB post-training
+      RSS is consistent with retained workspaces, but activation/checkpoint and
+      allocator contributions require finer instrumentation before assigning cause.
 - [ ] P4: Implement the Memory Fabric gate fix (decoupled lr param groups + B-init) that the
       README already claims, then run the synthetic gate-open test to confirm "3 steps".
 - [ ] P5: Run Memory Fabric Stage 3 — write N facts into TinyLlama weights, measure
@@ -186,6 +198,11 @@ Status key: ✅ proven · 🟡 partial · ❌ unproven/contradicted · ⏳ not s
   within the 8 GiB budget but 17.8x the paper's 0.4 GiB estimate. The highest
   phase was training (7.340488 GiB), narrowly above model load/quantize (7.054710
   GiB). Verdicts: 8 GiB **REPRODUCED**; 0.4 GiB **NOT REPRODUCED**.
+  Follow-up source audit confirmed AdamW receives only 12,615,680 LoRA parameters
+  and embeddings/lm_head are frozen. Expected LoRA params + grads + Adam moments
+  are ~192.5 MiB, so full-model optimizer state does not explain the peak. Lowram
+  dequantization workspaces/allocator retention are the leading suspects; exact
+  attribution remains open.
 - 2026-08-14 - Added resumable Drive-backed P2 workflow and bounded-memory final
   layer calculations after the corrected 154/156 TinyLlama partial run. The old run
   stopped at `[155/156] START lm_head.weight` with `^C`.
