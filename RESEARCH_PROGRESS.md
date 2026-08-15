@@ -1,6 +1,6 @@
 # Little Fig — Research Progress Tracker
 
-_Maintained by the research effort. Last updated: 2026-08-14._
+_Maintained by the research effort. Last updated: 2026-08-15._
 
 This file tracks the state of the Harboria Labs AI Memory Stack research: what each
 paper claims, what is actually proven in code, and the plan to (1) verify/prove the
@@ -145,13 +145,20 @@ Status key: ✅ proven · 🟡 partial · ❌ unproven/contradicted · ⏳ not s
       measure the corrected collection peak. `FigModel.from_pretrained()` is a
       different code path and its end-to-end training peak remains independently
       unverified.
-- [ ] P3: Measure Fig Engine Tier-1 memory on the real TinyLlama training path.
+- [x] P3: Measure Fig Engine Tier-1 memory on the real TinyLlama training path.
       Script: `benchmark/experiment_8gb_v1.py`; Colab: `benchmark/P3_8GB_Colab.ipynb`.
       It records absolute process RSS against the 8 GiB budget and incremental RSS
       over startup against the paper's ~400 MB estimate. Default mode is `lowram`;
       `fast` caches full FP32 dequantized target weights and is not the minimum-memory
       claim. `FigModel.from_pretrained()` also builds all replacements before applying
-      them, while embeddings/lm_head remain FP32. These are the main suspects.
+      them, while embeddings/lm_head remain FP32. **Completed 2026-08-15:** TinyLlama
+      lowram (20 steps, batch 2, sequence 256) peaked at **7.340488 GiB RSS** and
+      **7.126644 GiB above startup**, so the absolute 8 GiB budget is reproduced
+      with **0.659512 GiB headroom**, but the paper's **0.4 GiB** estimate is not
+      reproduced. Load/quantize peaked at 7.054710 GiB; training peaked higher at
+      7.340488 GiB and left 6.811050 GiB resident. This measures CPU process RSS
+      for `FigModel.from_pretrained` plus Tier-1 training, not just packed weight
+      storage (reported base weights were 522.3 MB).
 - [ ] P4: Implement the Memory Fabric gate fix (decoupled lr param groups + B-init) that the
       README already claims, then run the synthetic gate-open test to confirm "3 steps".
 - [ ] P5: Run Memory Fabric Stage 3 — write N facts into TinyLlama weights, measure
@@ -174,6 +181,11 @@ Status key: ✅ proven · 🟡 partial · ❌ unproven/contradicted · ⏳ not s
   absolute process RSS. The test defaults to lowram mode and an exact-step local
   dataset. Local smoke reached model loading but the environment lacks transformers;
   the Colab wrapper installs project dependencies before running.
+- 2026-08-15 - Completed P3 TinyLlama lowram run: 20 steps, batch 2, sequence 256.
+  Overall peak RSS was 7.340488 GiB (7.126644 GiB over 0.213844 GiB baseline),
+  within the 8 GiB budget but 17.8x the paper's 0.4 GiB estimate. The highest
+  phase was training (7.340488 GiB), narrowly above model load/quantize (7.054710
+  GiB). Verdicts: 8 GiB **REPRODUCED**; 0.4 GiB **NOT REPRODUCED**.
 - 2026-08-14 - Added resumable Drive-backed P2 workflow and bounded-memory final
   layer calculations after the corrected 154/156 TinyLlama partial run. The old run
   stopped at `[155/156] START lm_head.weight` with `^C`.

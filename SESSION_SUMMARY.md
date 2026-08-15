@@ -1,14 +1,14 @@
 # Little Fig Research Session Summary
 
-_Last updated: 2026-08-14 (Africa/Lagos)_
+_Last updated: 2026-08-15 (Africa/Lagos)_
 
 This is the durable cross-session handoff. Read it with `RESEARCH_PROGRESS.md` when
 resuming work, and append a dated entry after each substantive session.
 
 ## Current objective
 
-Finish P2: verify FigQuant on all 156 TinyLlama matrices and save the complete JSON.
-Do not call the claim reproduced until the final JSON has 156 records.
+P2 and P3 verification are complete. Proceed to P4 unless the user requests a
+follow-up memory-mode comparison.
 
 ## State at handoff
 
@@ -88,16 +88,13 @@ after cloning it; the corrected collection peak still needs a new run. The actua
 
 1. Treat P2 FigQuant quality verification as complete; the result JSON and exact
    156-layer metrics are committed under `benchmark/`.
-2. Run `benchmark/P3_8GB_Colab.ipynb` with `MEMORY_MODE = 'lowram'`, the mode
-   relevant to the minimum-memory Tier-1 claim.
-3. Compare absolute peak RSS with 8 GiB and incremental peak RSS with the paper's
-   ~400 MB estimate. Preserve the load/quantize, dataset, and training phase split.
-4. If necessary, repeat with `figcache` and `fast` to identify cache tradeoffs.
-5. After P3, proceed to P4 Memory Fabric unless priorities change.
+2. P3 completed in `lowram`: 7.340488 GiB absolute peak, 7.126644 GiB incremental.
+   The 8 GiB budget passed; the ~400 MB estimate failed.
+3. Proceed to P4 Memory Fabric unless priorities change.
 
 ## Remaining verification
 
-- Run P3 on TinyLlama. Local smoke could not pass model loading because this local
-  environment does not have `transformers` installed.
+- Optional: repeat P3 with `figcache` and `fast` to quantify cache tradeoffs; this is
+  not required to decide the lowram claims.
 - Re-measure the corrected P2 collector only if a new harness-specific number is
   useful; it is not required to decide the production training claim.
