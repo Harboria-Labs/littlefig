@@ -1,14 +1,78 @@
 # Little Fig Research Session Summary
 
-_Last updated: 2026-08-15 (Africa/Lagos)_
+_Last updated: 2026-08-18 (Africa/Lagos)_
 
 This is the durable cross-session handoff. Read it with `RESEARCH_PROGRESS.md` when
 resuming work, and append a dated entry after each substantive session.
 
 ## Current objective
 
-P2 and P3 verification are complete. Run the cheap P3a isolated lowram allocator
-diagnostic before proceeding to P4.
+Execute the P4 FigSweep/storage-backed memory investigation in strict order,
+starting with P4a only. Record, commit, and surface each result before proceeding.
+
+## 2026-08-18 P4 plan: FigSweep wiring + storage-backed memory investigation
+
+This sequence is interruption-safe and must not be reordered:
+
+1. **P4a OS swap:** test whether Colab permits swap; if so, rerun the unmodified
+   P3 baseline. This cheaply tests whether ordinary paging helps before custom code.
+2. **P4b FigSweep wiring:** connect `figsweep_advance()` to real layer forwards,
+   use window 4, and compare phase RSS/speed with P3b. This addresses the confirmed
+   dormant rolling-window path.
+3. **P4c LISA:** pass probe inputs and run paired sensitivity-guided vs random LISA
+   on GPT-2, 8 seeds, held-out loss. Current trainer wiring never activates the
+   sensitivity probe.
+4. **P4d auto tier:** omit the tier under normal Colab RAM, then test constrained
+   RAM downgrade if sandbox controls permit. All previous tests forced a tier.
+5. **P4e memory modes:** compare lowram, figcache, and fast using the same P3
+   workload, recording memory and speed. Cached modes also activate fused
+   Linear+LoRA.
+6. **P4f disk-stream design and proof:** only after P4a-P4e, document mmap-backed
+   windowing with `saved_tensors_hooks` ownership and build an isolated 2-3-layer
+   proof before touching full training. Backward lifetime must be preserved.
+
+After every item, append concrete numbers/restrictions and a verdict to both files,
+commit it separately as `research(P4x): ...`, and report it before starting the
+next item.
+
+## 2026-08-18 P4a result
+
+**Verdict: NOT RUN / ENVIRONMENT BLOCKED.** This workspace is Windows PowerShell,
+not the Colab Linux runtime used by P3. There is no Colab session or Linux swap
+control available to this agent, so it cannot determine whether Colab permits a
+swap file or rerun P3 with swap enabled. No substitute test was run and no swap
+claim is made. P4b remains paused pending the user's Colab swap-permission result.
+
+## 2026-08-18 source activation audit (A1-A4)
+
+- **A1 FigSweep — PARTIALLY wired, inactive in tested lowram path.**
+  `FigTrainingConfig.figsweep_window` calls `model.enable_figsweep()` only when
+  explicitly greater than zero (`src/little_fig/engine/trainer.py:139-143`).
+  The rolling helper `FigModel.figsweep_advance()` is defined
+  (`src/little_fig/engine/model.py:658-687`) but has no call site in trainer/model
+  execution. Lowram therefore uses the independent `DequantMatmul` branch in
+  `src/little_fig/engine/linear.py:197-211`, with no active rolling window.
+- **A2 LISA — NO for STREAMING_LORA; separate tier.** `TrainingTier.LISA` is a
+  distinct enum value (`src/little_fig/engine/tier.py:25-30`) and dispatches to
+  `_train_lisa()` only in its own branch (`src/little_fig/engine/trainer.py:454-462`).
+  The trainer constructs `LISAScheduler` without probe inputs
+  (`src/little_fig/engine/trainer.py:544-550`), so the scheduler's sensitivity
+  probe condition is false (`src/little_fig/engine/lisa.py:90-96`) and selection
+  falls back to uniform random (`src/little_fig/engine/lisa.py:190-210`).
+- **A3 Auto tier selection — YES, but only when tier is omitted.** The trainer
+  calls `select_tier(total_params)` when `config.training_tier` is `None`
+  (`src/little_fig/engine/trainer.py:126-132`). `select_tier()` reads
+  `psutil.virtual_memory().available` (`src/little_fig/engine/tier.py:165-167,
+  200-205`), keeps 30% headroom via a 70% budget (`206-207`), and tests LISA,
+  LOMO, STREAMING_LORA, then MeZO (`209-226`). It does not read storage.
+- **A4 FigKernel — PARTIALLY active.** `FigModel.from_pretrained()` calls
+  `_swap_rmsnorm()` when `fuse_kernels=True` (`src/little_fig/engine/model.py:229-231`),
+  which is the logged RMSNorm replacement (`55-83`). Fused Linear+LoRA is only
+  attempted by `FigLinear.forward()` when `_cached_W` exists, i.e. fast/cache mode
+  (`src/little_fig/engine/linear.py:185-195`); lowram takes the dequant autograd
+  path (`197-211`). `FigSwiGLU` and `FigCrossEntropy` are defined/exported in
+  `src/little_fig/engine/figkernel.py:74-104,169-204`, but no model/trainer
+  replacement or Tier-1 call site was found, so they are standalone utilities.
 
 ## State at handoff
 
@@ -84,13 +148,14 @@ Fig Engine's production training-memory claim. Quantization-only peak was
 after cloning it; the corrected collection peak still needs a new run. The actual
 `FigModel.from_pretrained()` plus training path was measured separately in P3 below.
 
-## Completed P3 result (2026-08-15)
+## Completed P3 result (2026-08-18)
 
 The real TinyLlama Tier-1 CPU path completed 20 lowram steps at batch 2 and sequence
-length 256. Peak RSS was **7.340488 GiB**, giving **0.659512 GiB** headroom against
-8 GiB. Incremental RSS above startup was **7.126644 GiB**, so the paper's ~400 MB
-estimate was not reproduced. Load/quantize peaked at 7.054710 GiB; training was the
-worst phase; post-training RSS remained 6.811050 GiB.
+length 256. Peak RSS was **7.154205 GiB**, giving **0.845795 GiB** headroom against
+8 GiB. Incremental RSS above startup was **6.940331 GiB**, so the paper's ~400 MB
+estimate was not reproduced. Load/quantize was the worst phase at 7.154205 GiB;
+training peaked at 6.574093 GiB; post-training RSS was 6.030830 GiB. Runtime was
+3,686.7 s, with 1,403.3 s spent loading/quantizing and 2,269.9 s training.
 
 Source audit rules out accidental full-model AdamW state. `model.py` freezes every
 non-LoRA parameter, and `trainer.py` passes only `requires_grad` parameters to
@@ -106,7 +171,7 @@ still needs finer per-step instrumentation.
 
 1. Treat P2 FigQuant quality verification as complete; the result JSON and exact
    156-layer metrics are committed under `benchmark/`.
-2. P3 completed in `lowram`: 7.340488 GiB absolute peak, 7.126644 GiB incremental.
+2. P3 completed in `lowram`: 7.154205 GiB absolute peak, 6.940331 GiB incremental.
    The 8 GiB budget passed; the ~400 MB estimate failed.
 3. Proceed to P4 Memory Fabric unless priorities change.
 4. Immediate diagnostic: run `benchmark/experiment_lowram_allocator_v1.py` in

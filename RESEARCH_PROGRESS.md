@@ -1,6 +1,6 @@
 # Little Fig — Research Progress Tracker
 
-_Maintained by the research effort. Last updated: 2026-08-15._
+_Maintained by the research effort. Last updated: 2026-08-18._
 
 This file tracks the state of the Harboria Labs AI Memory Stack research: what each
 paper claims, what is actually proven in code, and the plan to (1) verify/prove the
@@ -152,11 +152,11 @@ Status key: ✅ proven · 🟡 partial · ❌ unproven/contradicted · ⏳ not s
       `fast` caches full FP32 dequantized target weights and is not the minimum-memory
       claim. `FigModel.from_pretrained()` also builds all replacements before applying
       them, while embeddings/lm_head remain FP32. **Completed 2026-08-15:** TinyLlama
-      lowram (20 steps, batch 2, sequence 256) peaked at **7.340488 GiB RSS** and
-      **7.126644 GiB above startup**, so the absolute 8 GiB budget is reproduced
-      with **0.659512 GiB headroom**, but the paper's **0.4 GiB** estimate is not
-      reproduced. Load/quantize peaked at 7.054710 GiB; training peaked higher at
-      7.340488 GiB and left 6.811050 GiB resident. This measures CPU process RSS
+      lowram (20 steps, batch 2, sequence 256) peaked at **7.154205 GiB RSS** and
+      **6.940331 GiB above startup**, so the absolute 8 GiB budget is reproduced
+      with **0.845795 GiB headroom**, but the paper's **0.4 GiB** estimate is not
+      reproduced. Load/quantize peaked at 7.154205 GiB; training peaked at
+      6.574093 GiB and left 6.030830 GiB resident. This measures CPU process RSS
       for `FigModel.from_pretrained` plus Tier-1 training, not just packed weight
       storage (reported base weights were 522.3 MB).
       Source audit after the run rules out full-model AdamW state: Tier 1 passes
@@ -184,6 +184,14 @@ Status key: ✅ proven · 🟡 partial · ❌ unproven/contradicted · ⏳ not s
 - [ ] P3b: Repeat the complete TinyLlama lowram run with baseline versus
       `--allocator-trim` after every optimizer step. Code pushed as commit
       `a1c1cbc`; compare peak and post-training RSS before proceeding.
+      **Baseline leg completed 2026-08-18:** 20 steps, batch 2, sequence 256,
+      allocator trim disabled. Overall peak was **7.154205 GiB RSS** (**6.940331
+      GiB** above the 0.213875 GiB startup baseline), with **0.845795 GiB**
+      headroom under the 8 GiB budget. Model load/quantize was the worst phase
+      (7.154205 GiB); training reached 6.574093 GiB and post-training idle was
+      6.030830 GiB. Verdict: **8 GiB REPRODUCED**; paper's **0.4 GiB estimate
+      NOT REPRODUCED**. Durable result: `figengine_8gb_lowram_results.json`.
+      The allocator-trim comparison leg is still pending, so P3b remains open.
 - [ ] P4: Implement the Memory Fabric gate fix (decoupled lr param groups + B-init) that the
       README already claims, then run the synthetic gate-open test to confirm "3 steps".
 - [ ] P5: Run Memory Fabric Stage 3 — write N facts into TinyLlama weights, measure
@@ -198,6 +206,56 @@ Status key: ✅ proven · 🟡 partial · ❌ unproven/contradicted · ⏳ not s
 - [ ] Memory in weights (goal #3): scale Memory Fabric 1→100 facts, measure interference,
       base-capability drift, consolidation/promotion.
 
+## P4: FigSweep wiring + storage-backed memory investigation
+
+_Plan recorded 2026-08-18. Execute strictly in order and record/commit each result
+before starting the next item. Surface each result for review; do not proceed to
+P4f until P4a-P4e are complete._
+
+- [x] **P4a — OS-level swap quick test.** First determine whether the Colab Linux
+  environment permits creating/enabling swap. If permitted, rerun the existing P3
+  baseline unchanged with swap enabled and compare phase peak RSS against the P3b
+  baseline (7.154205 GiB load/quantize; 6.574093 GiB training). Why first: this is
+  the cheapest possible storage-backed memory experiment and establishes whether
+  OS paging provides useful relief before custom streaming work. If Colab forbids
+  swap, record the restriction plainly and proceed only after review.
+- [ ] **P4b — Wire FigSweep into lowram training.** Connect the existing
+  `figsweep_advance()` mechanism to actual layer-by-layer forward execution, enable
+  `figsweep_window=4`, rerun the P3 configuration, and compare load, training,
+  post-training, speed, and overall RSS against P3b. Why second: the source audit
+  proved the intended rolling-window method exists but never advances, making this
+  the highest-priority real implementation gap behind the training memory spike.
+- [ ] **P4c — Wire and test sensitivity-guided LISA.** Pass real probe inputs to
+  `LISAScheduler`, then run a paired sensitivity-guided-versus-random LISA study on
+  GPT-2 with 8 seeds and held-out evaluation loss. Why third: current LISA silently
+  uses uniform random sampling, so no existing result tests the paper's claimed
+  10% sensitivity advantage.
+- [ ] **P4d — Test automatic tier selection end to end.** On normal Colab RAM,
+  construct trainer/model without manually selecting a tier and record the tier
+  chosen from real available RAM. Then, if the sandbox permits, constrain memory
+  with a cgroup/container limit and verify automatic downgrade behavior. Why
+  fourth: the selector exists but all research runs bypassed it, and its practical
+  behavior and constrained-memory fallback remain unverified.
+- [ ] **P4e — Compare lowram, figcache, and fast modes.** Run the same P3 workload
+  in all three modes and report phase RSS, overall peak, post-training residency,
+  runtime, and steps/second. Why fifth: only lowram has been measured, while the
+  cached modes exercise the fused Linear+LoRA path and expose the actual
+  memory/speed tradeoff.
+- [ ] **P4f — Design disk-streamed FigSweep window; isolated proof only.** After
+  P4a-P4e are complete, write a design using `torch.from_file` or safetensors mmap
+  plus `torch.autograd.graph.saved_tensors_hooks` to manage forward/backward tensor
+  ownership correctly. Build only a 2-3-layer proof of concept before modifying
+  full-model training. Why last: disk streaming is the largest and riskiest change;
+  earlier measurements must establish whether it is necessary and what interface
+  it must improve. Never release a mapped tensor merely because forward returned,
+  because autograd may still require it during backward.
+
+**P4a result (2026-08-18): NOT RUN / ENVIRONMENT BLOCKED.** This workspace is
+Windows PowerShell, not the Colab Linux runtime used by P3. No Colab session or
+Linux swap control is available here, so swap permission and a swap-enabled P3
+rerun cannot be measured without inventing a result. No substitute test was run;
+P4b is paused pending the Colab swap-permission outcome.
+
 ---
 
 ## Open log
@@ -206,16 +264,41 @@ Status key: ✅ proven · 🟡 partial · ❌ unproven/contradicted · ⏳ not s
   absolute process RSS. The test defaults to lowram mode and an exact-step local
   dataset. Local smoke reached model loading but the environment lacks transformers;
   the Colab wrapper installs project dependencies before running.
-- 2026-08-15 - Completed P3 TinyLlama lowram run: 20 steps, batch 2, sequence 256.
-  Overall peak RSS was 7.340488 GiB (7.126644 GiB over 0.213844 GiB baseline),
-  within the 8 GiB budget but 17.8x the paper's 0.4 GiB estimate. The highest
-  phase was training (7.340488 GiB), narrowly above model load/quantize (7.054710
-  GiB). Verdicts: 8 GiB **REPRODUCED**; 0.4 GiB **NOT REPRODUCED**.
+- 2026-08-18 - Re-ran P3 TinyLlama lowram baseline: 20 steps, batch 2, sequence 256.
+  Overall peak RSS was 7.154205 GiB (6.940331 GiB over 0.213875 GiB baseline),
+  within the 8 GiB budget with 0.845795 GiB headroom but 17.35x the paper's 0.4
+  GiB estimate. Model load/quantize was highest (7.154205 GiB); training peaked
+  at 6.574093 GiB. Verdicts: 8 GiB **REPRODUCED**; 0.4 GiB **NOT REPRODUCED**.
   Follow-up source audit confirmed AdamW receives only 12,615,680 LoRA parameters
   and embeddings/lm_head are frozen. Expected LoRA params + grads + Adam moments
   are ~192.5 MiB, so full-model optimizer state does not explain the peak. Lowram
   dequantization workspaces/allocator retention are the leading suspects; exact
   attribution remains open.
+- 2026-08-18 - P3b baseline leg completed with allocator trimming disabled. The
+  full 20-step run returned code 0 and saved `figengine_8gb_lowram_results.json`:
+  7.154205 GiB overall peak, 6.940331 GiB incremental RSS, 8 GiB **REPRODUCED**,
+  0.4 GiB paper estimate **NOT REPRODUCED**. The `--allocator-trim` comparison
+  remains to be run.
+- 2026-08-18 - Source audit of dormant Fig Engine features (A1-A4): FigSweep's
+  `enable_figsweep()` is wired only when `figsweep_window > 0`, but
+  `figsweep_advance()` has no call site in the trainer/model forward path; the
+  tested lowram path therefore dequantizes each layer independently with no
+  rolling-window bound. LISA is a separate `TrainingTier.LISA` dispatch branch;
+  STREAMING_LORA never enters it, and the trainer supplies no probe inputs, so
+  even LISA's current path uses uniform random layer selection rather than
+  sensitivity-guided weights. Auto tier selection does exist when
+  `FigTrainingConfig.tier` is `None`: it reads `psutil.virtual_memory().available`,
+  budgets 70%, and returns the first fitting tier in LISA, LOMO, STREAMING_LORA,
+  MeZO order; all P1-P3b tests explicitly forced STREAMING_LORA. FigKernel is
+  only partially wired: model loading automatically swaps RMSNorm modules, and
+  FigLinear uses fused Linear+LoRA only for cached fast-mode weights; FigSwiGLU
+  and chunked cross-entropy are exported standalone but have no model/trainer
+  swap or call site in Tier 1.
+- 2026-08-18 - P4a OS-level swap quick test: **NOT RUN / ENVIRONMENT BLOCKED**.
+  This workspace is Windows PowerShell and has no access to the Colab Linux
+  instance, so Linux swap permission and a swap-enabled P3 rerun cannot be tested
+  honestly. No substitute local test was run; P4b remains paused pending the Colab
+  swap-permission result.
 - 2026-08-14 - Added resumable Drive-backed P2 workflow and bounded-memory final
   layer calculations after the corrected 154/156 TinyLlama partial run. The old run
   stopped at `[155/156] START lm_head.weight` with `^C`.
