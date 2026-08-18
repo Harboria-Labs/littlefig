@@ -43,6 +43,16 @@ control available to this agent, so it cannot determine whether Colab permits a
 swap file or rerun P3 with swap enabled. No substitute test was run and no swap
 claim is made. P4b remains paused pending the user's Colab swap-permission result.
 
+## 2026-08-19 implementation queue: item 1 complete
+
+FigQuant quantization progress is now live in `src/little_fig/engine/model.py`.
+Each completed target layer prints its index/name, layer time, running average,
+elapsed time, ETA, cumulative compression, and current process RSS. Existing
+notebook stdout capture makes this telemetry durable in the benchmark log.
+Verification: `python -m py_compile src/little_fig/engine/model.py` and
+`git diff --check` passed. No Colab benchmark rerun was performed; FigSweep
+wiring and the remaining incomplete features are still pending.
+
 ## 2026-08-18 source activation audit (A1-A4)
 
 - **A1 FigSweep — PARTIALLY wired, inactive in tested lowram path.**

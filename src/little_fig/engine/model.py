@@ -17,6 +17,7 @@ import torch.nn as nn
 import os
 import json
 import gc
+import time
 from typing import Optional, Dict, List, Tuple
 
 from .figquant import figquant_quantize, FigQuantTensor
@@ -244,7 +245,18 @@ class FigModel(nn.Module):
             print(f"   Quantizing linear layers with FigQuant...")
         
         replacements = {}
-        for name, module in orig_model.named_modules():
+        quantized_layers = [
+            (name, module)
+            for name, module in orig_model.named_modules()
+            if (isinstance(module, nn.Linear) or module.__class__.__name__ == "Conv1D")
+            and any(t in name.split(".")[-1] for t in target_modules)
+        ]
+        total_quant_layers = len(quantized_layers)
+        quantization_started = time.time()
+        print(f"   FigQuant progress: 0/{total_quant_layers} layers", flush=True)
+
+        for name, module in quantized_layers:
+            layer_started = time.time()
             # Support both nn.Linear and transformers Conv1D (used by GPT-2)
             is_linear = isinstance(module, nn.Linear)
             is_conv1d = module.__class__.__name__ == "Conv1D"
@@ -312,6 +324,26 @@ class FigModel(nn.Module):
             
             replacements[name] = (fig_layer, is_conv1d)
             quantized_count += 1
+
+            elapsed_s = time.time() - quantization_started
+            layer_s = time.time() - layer_started
+            avg_layer_s = elapsed_s / quantized_count
+            eta_s = avg_layer_s * (total_quant_layers - quantized_count)
+            rss_text = ""
+            try:
+                import psutil
+                rss_gib = psutil.Process(os.getpid()).memory_info().rss / (1024 ** 3)
+                rss_text = f" rss={rss_gib:.3f}GiB"
+            except Exception:
+                pass
+            compression = original_bytes / max(quantized_bytes, 1)
+            print(
+                f"   FigQuant [{quantized_count}/{total_quant_layers}] {name} "
+                f"layer={layer_s:.1f}s avg={avg_layer_s:.1f}s "
+                f"elapsed={elapsed_s:.1f}s eta={eta_s:.1f}s "
+                f"compression={compression:.2f}x{rss_text}",
+                flush=True,
+            )
         
         # Apply replacements
         for name, (fig_layer, was_conv1d) in replacements.items():

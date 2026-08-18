@@ -239,8 +239,8 @@ P4f until P4a-P4e are complete._
 - [ ] **P4e — Compare lowram, figcache, and fast modes.** Run the same P3 workload
   in all three modes and report phase RSS, overall peak, post-training residency,
   runtime, and steps/second. Why fifth: only lowram has been measured, while the
-  cached modes exercise the fused Linear+LoRA path and expose the actual
-  memory/speed tradeoff.
+      cached modes exercise the fused Linear+LoRA path and expose the actual
+      memory/speed tradeoff.
 - [ ] **P4f — Design disk-streamed FigSweep window; isolated proof only.** After
   P4a-P4e are complete, write a design using `torch.from_file` or safetensors mmap
   plus `torch.autograd.graph.saved_tensors_hooks` to manage forward/backward tensor
@@ -299,6 +299,12 @@ P4b is paused pending the Colab swap-permission outcome.
   instance, so Linux swap permission and a swap-enabled P3 rerun cannot be tested
   honestly. No substitute local test was run; P4b remains paused pending the Colab
   swap-permission result.
+- 2026-08-19 - Observability item 1 completed: FigQuant model loading now emits
+  live per-layer progress with `[n/total]`, layer duration, running average,
+  elapsed time, ETA, cumulative compression, and current process RSS. Existing
+  notebook stdout capture makes this telemetry durable in the benchmark log.
+  `src/little_fig/engine/model.py` passes `py_compile` and `git diff --check`.
+  No benchmark rerun was performed in this turn.
 - 2026-08-14 - Added resumable Drive-backed P2 workflow and bounded-memory final
   layer calculations after the corrected 154/156 TinyLlama partial run. The old run
   stopped at `[155/156] START lm_head.weight` with `^C`.
