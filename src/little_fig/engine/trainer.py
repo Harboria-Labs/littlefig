@@ -25,6 +25,8 @@ import os
 import json
 import time
 import math
+import ctypes
+import platform
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Union
 
@@ -85,6 +87,7 @@ class FigTrainingConfig:
     activation_checkpointing: bool = True   # Recompute activations in backward (~70% activation savings)
     memory_mode: str = "fast"               # "fast" (FP32 cache), "figcache" (75% less), "lowram" (min memory)
     figsweep_window: int = 0                # FigSweep rolling window (0=disabled, >0=window size)
+    allocator_trim: bool = False            # Return freed glibc pages after each optimizer step
     
     # Output
     output_dir: str = "./checkpoints/fig_run"
@@ -428,6 +431,16 @@ class FigTrainer:
             })
         return tokenized
     
+    @staticmethod
+    def _trim_allocator():
+        """Best-effort Linux glibc trim used by the full-model memory diagnostic."""
+        if platform.system() != "Linux":
+            return False
+        try:
+            return bool(ctypes.CDLL("libc.so.6").malloc_trim(0))
+        except Exception:
+            return False
+
     def train(self):
         """Run training loop."""
         if self.dataloader is None:
@@ -715,6 +728,8 @@ class FigTrainer:
                     optimizer.step()
                     scheduler.step()
                     optimizer.zero_grad()
+                    if config.allocator_trim:
+                        self._trim_allocator()
                     
                     epoch_loss += accum_loss
                     epoch_steps += 1

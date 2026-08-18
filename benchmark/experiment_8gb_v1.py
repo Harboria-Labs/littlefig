@@ -137,6 +137,11 @@ def parse_args():
     parser.add_argument("--memory-mode", choices=("lowram", "figcache", "fast"), default="lowram")
     parser.add_argument("--memory-budget-gib", type=float, default=8.0)
     parser.add_argument("--claim-memory-gib", type=float, default=0.4)
+    parser.add_argument(
+        "--allocator-trim",
+        action="store_true",
+        help="Run gc.collect() and glibc malloc_trim(0) after each optimizer step.",
+    )
     parser.add_argument("--results-path", default=None)
     return parser.parse_args()
 
@@ -162,6 +167,8 @@ def main():
         "memory_mode": args.memory_mode,
         "budget_gib": args.memory_budget_gib,
         "paper_claim_gib": args.claim_memory_gib,
+        "allocator_trim": args.allocator_trim,
+        "experiment_variant": "trim_each_step" if args.allocator_trim else "baseline",
         "status": "starting",
         "scope": "CPU process RSS for FigModel.from_pretrained plus FigTrainer Tier-1 training",
     }
@@ -177,6 +184,7 @@ def main():
     started = time.time()
     log("=" * 72)
     log(f"Fig Engine memory test | {model_id} | mode={args.memory_mode} | steps={n_steps}")
+    log(f"Allocator intervention: {'trim after every optimizer step' if args.allocator_trim else 'disabled'}")
     log(f"8 GiB budget={args.memory_budget_gib:.3f} | paper estimate={args.claim_memory_gib:.3f} GiB")
     log("=" * 72)
 
@@ -209,6 +217,7 @@ def main():
             use_pipeline=False,
             activation_checkpointing=True,
             memory_mode=args.memory_mode,
+            allocator_trim=args.allocator_trim,
             logging_steps=1,
             save_steps=0,
             output_dir=os.path.join(os.path.dirname(os.path.abspath(results_path)), "p3_checkpoints"),
