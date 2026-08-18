@@ -178,6 +178,12 @@ Status key: ✅ proven · 🟡 partial · ❌ unproven/contradicted · ⏳ not s
       per-iteration RSS at start/forward/backward/GC and compare before/after Linux
       `malloc_trim(0)`. Steady single-layer growth implicates the lowram path;
       trim-released RSS identifies allocator cache rather than live tensors.
+- [x] P3a completed 2026-08-18: q_proj retained 161.6 MiB after GC and released
+      155.4 MiB with `malloc_trim(0)`; mlp_proj retained 94.9 MiB and released
+      102.7 MiB. Verdict: allocator retention reproduced; no unbounded leak.
+- [ ] P3b: Repeat the complete TinyLlama lowram run with baseline versus
+      `--allocator-trim` after every optimizer step. Code pushed as commit
+      `a1c1cbc`; compare peak and post-training RSS before proceeding.
 - [ ] P4: Implement the Memory Fabric gate fix (decoupled lr param groups + B-init) that the
       README already claims, then run the synthetic gate-open test to confirm "3 steps".
 - [ ] P5: Run Memory Fabric Stage 3 — write N facts into TinyLlama weights, measure

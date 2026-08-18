@@ -119,3 +119,31 @@ still needs finer per-step instrumentation.
   not required to decide the lowram claims.
 - Re-measure the corrected P2 collector only if a new harness-specific number is
   useful; it is not required to decide the production training claim.
+
+## 2026-08-18 session handoff
+
+P3a completed in Colab using exact TinyLlama q_proj and MLP shapes (20 iterations,
+batch 2, sequence 256, PyTorch 2.11 CPU). The isolated lowram path showed bounded
+RSS retention after GC, and Linux `malloc_trim(0)` released nearly all of it:
+
+- q_proj: 161.6 MiB retained after GC; 155.4 MiB released by trim (96%).
+- mlp_proj: 94.9 MiB retained after GC; 102.7 MiB released by trim.
+- No unbounded live-tensor/autograd leak was observed.
+
+Verdict: **P3a REPRODUCED allocator retention** as a real contributor to the full
+P3 RSS, but did not establish that it explains the entire 7.34 GiB peak.
+
+P3b was implemented and pushed in commit `a1c1cbc` on
+`research/p1-figmezo-verify`. `FigTrainingConfig.allocator_trim` is opt-in,
+`FigTrainer` calls glibc `malloc_trim(0)` after each optimizer step, and
+`benchmark/experiment_8gb_v1.py` accepts `--allocator-trim` while recording
+`experiment_variant` as `baseline` or `trim_each_step`.
+
+Run identical full TinyLlama Colab tests for baseline and trim intervention, using
+separate Drive result files under `littlefig-p3b`. The Colab notebook is:
+`https://colab.research.google.com/github/Harboria-Labs/littlefig/blob/research/p1-figmezo-verify/benchmark/P3_8GB_Colab.ipynb`.
+
+Future allocator work may involve a custom C++ allocator, but first formalize the
+mathematics of size classes, alignment, workspace lifetimes, reuse, fragmentation,
+live bytes versus resident bytes, and synchronization. Use P3b as the comparison
+baseline before designing the allocator.
