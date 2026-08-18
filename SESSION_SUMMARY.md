@@ -61,6 +61,15 @@ training loss/speed/learning rate when available, prints quantization RSS sample
 and saves `figengine_8gb_<mode>_telemetry.png` to Drive. Notebook JSON validation
 passed. This is notebook-only; no Colab rerun was performed.
 
+## 2026-08-19 implementation queue: FigSweep wiring
+
+`FigModel.enable_figsweep()` now installs forward pre-hooks on each registered
+`FigLinear`; each hook calls `figsweep_advance()` immediately before forward.
+Repeated enable removes prior hooks, and layer order follows `named_modules()`
+traversal rather than lexical sorting. `model.py` compiles cleanly. This is
+source-level wiring only; the P4b Colab RSS/speed/correctness comparison remains
+required before declaring a memory improvement validated.
+
 ## 2026-08-18 source activation audit (A1-A4)
 
 - **A1 FigSweep — PARTIALLY wired, inactive in tested lowram path.**

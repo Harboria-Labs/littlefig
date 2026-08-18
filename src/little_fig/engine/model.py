@@ -659,7 +659,9 @@ class FigModel(nn.Module):
         Call this AFTER from_pretrained() to switch from full fast mode.
         """
         # Start all layers in lowram, then cache the first window
-        layer_names = sorted(self._fig_layers.keys())
+        # _fig_layers preserves named_modules traversal order, which matches forward
+        # execution for supported sequential transformer architectures.
+        layer_names = list(self._fig_layers.keys())
         for name in layer_names:
             layer = self._fig_layers[name]
             if hasattr(layer, 'set_mode'):
@@ -674,6 +676,15 @@ class FigModel(nn.Module):
         self._figsweep_window = window_size
         self._figsweep_layers = layer_names
         self._figsweep_pos = 0
+        for hook in getattr(self, "_figsweep_hooks", []):
+            hook.remove()
+        self._figsweep_hooks = []
+        for layer_idx, name in enumerate(layer_names):
+            layer = self._fig_layers[name]
+            if hasattr(layer, "register_forward_pre_hook"):
+                def _advance_hook(_module, _inputs, idx=layer_idx):
+                    self.figsweep_advance(idx)
+                self._figsweep_hooks.append(layer.register_forward_pre_hook(_advance_hook))
         
         total_layers = len(layer_names)
         if total_layers > 0:

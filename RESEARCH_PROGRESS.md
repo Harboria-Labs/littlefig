@@ -311,6 +311,12 @@ P4b is paused pending the Colab swap-permission outcome.
   loss/speed/learning-rate when step lines are present, reports quantization RSS
   samples, and saves a PNG to the Drive benchmark directory. Notebook JSON
   validation passed; no Colab rerun was performed in this turn.
+- 2026-08-19 - FigSweep wiring implementation completed: `enable_figsweep()` now
+  registers forward pre-hooks on every FigLinear in traversal order, so each layer
+  calls `figsweep_advance()` before its forward. Existing hooks are removed before
+  re-enabling, and module traversal order is preserved instead of lexical sorting.
+  Source syntax validation passed. A Colab run is still required to measure
+  RSS/speed and verify backward correctness.
 - 2026-08-14 - Added resumable Drive-backed P2 workflow and bounded-memory final
   layer calculations after the corrected 154/156 TinyLlama partial run. The old run
   stopped at `[155/156] START lm_head.weight` with `^C`.
