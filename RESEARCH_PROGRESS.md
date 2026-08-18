@@ -305,6 +305,12 @@ P4b is paused pending the Colab swap-permission outcome.
   notebook stdout capture makes this telemetry durable in the benchmark log.
   `src/little_fig/engine/model.py` passes `py_compile` and `git diff --check`.
   No benchmark rerun was performed in this turn.
+- 2026-08-19 - Observability item 2 completed: `benchmark/P3_8GB_Colab.ipynb`
+  now includes a post-run telemetry visualization cell. It reads the durable
+  JSON/log, plots peak RSS by phase with the configured budget, plots training
+  loss/speed/learning-rate when step lines are present, reports quantization RSS
+  samples, and saves a PNG to the Drive benchmark directory. Notebook JSON
+  validation passed; no Colab rerun was performed in this turn.
 - 2026-08-14 - Added resumable Drive-backed P2 workflow and bounded-memory final
   layer calculations after the corrected 154/156 TinyLlama partial run. The old run
   stopped at `[155/156] START lm_head.weight` with `^C`.

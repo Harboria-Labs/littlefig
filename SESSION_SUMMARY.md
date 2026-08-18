@@ -53,6 +53,14 @@ Verification: `python -m py_compile src/little_fig/engine/model.py` and
 `git diff --check` passed. No Colab benchmark rerun was performed; FigSweep
 wiring and the remaining incomplete features are still pending.
 
+## 2026-08-19 implementation queue: item 2 complete
+
+`benchmark/P3_8GB_Colab.ipynb` now has a telemetry visualization cell. It parses
+the durable result JSON and log, plots phase peak RSS and the 8 GiB budget, plots
+training loss/speed/learning rate when available, prints quantization RSS samples,
+and saves `figengine_8gb_<mode>_telemetry.png` to Drive. Notebook JSON validation
+passed. This is notebook-only; no Colab rerun was performed.
+
 ## 2026-08-18 source activation audit (A1-A4)
 
 - **A1 FigSweep — PARTIALLY wired, inactive in tested lowram path.**
