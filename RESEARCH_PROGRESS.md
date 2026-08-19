@@ -256,6 +256,86 @@ Linux swap control is available here, so swap permission and a swap-enabled P3
 rerun cannot be measured without inventing a result. No substitute test was run;
 P4b is paused pending the Colab swap-permission outcome.
 
+## P5: lowram compute-path investigation — dequant dtype and structure
+
+_Plan recorded 2026-08-19. A new angle beyond P4 windowing/wiring: the actual
+lowram COMPUTE path (`DequantMatmul`), a suspected source of training-phase memory
+separate from the P3a allocator-retention finding. Two independent variables:
+(1) the dequant intermediate's DTYPE (FP32 vs BF16); (2) its STRUCTURE (materialize
+the full matrix vs tiled/fused, never holding the full matrix). Run strictly in
+order, record/commit each result, surface after P5a and P5b before proceeding, and
+do not start P5c until P5b is reviewed._
+
+- [x] **P5a — Source read only, no code changes.** Determine exactly how
+  `DequantMatmul` dequantizes (full vs tiled), what dtype the intermediate uses
+  (hardcoded vs configurable), whether `backward()` re-dequantizes or reuses saved
+  tensors, and how `fig_fused_linear_lora` differs. Why first: the fix design
+  depends entirely on the real mechanism; guessing risks building the wrong variant.
+- [ ] **P5b — Isolated three-variant test** (`benchmark/experiment_dequant_variants_v1.py`),
+  P3a-style harness (same two layer shapes, 20 iterations, directly comparable to
+  P3a: q_proj 161.6 MiB, mlp_proj 94.9 MiB growth, ~96-100% trim-reclaimable).
+  Variant 1 = current FP32 baseline; Variant 2 = BF16 intermediate (dtype-only);
+  Variant 3 = tiled/fused BF16 (structural, never holds the full matrix). Per
+  variant, measure RSS growth per layer, trim-reclaimed RSS, correctness vs Variant 1
+  (values + gradients within tolerance), and wall-clock per iteration. Why: isolates
+  the two variables cleanly before touching the real path.
+- [ ] **P5c — Wire the structural fix into the real lowram path**, ONLY if Variant 3
+  clearly beats Variant 1 AND passes correctness. Re-run full P3 (batch 2, seq 256,
+  20 steps); a genuine fix lands clearly below the 6.8-7.4 GiB three-run noise floor,
+  not merely within it. Why last: the real-path change is riskiest; gate it on the
+  isolated proof.
+
+**P5a result (2026-08-19): SOURCE READ COMPLETE. Structure is the real lever;
+dtype is minor and orthogonal.** All citations are to committed code.
+
+- **Q1 — full materialization vs tiled: FULL, NOT TILED.** `DequantMatmul.forward`
+  builds one complete weight then multiplies: `W = figquant_dequantize(q).to(dtype=
+  x.dtype)`, `y = F.linear(x, W)` (`linear.py:45-46`). `figquant_dequantize`
+  (`figquant.py:188-210`) has no tiling: it unpacks ALL nibbles to a full-size int64
+  tensor (`torch.stack([low, high], dim=1).reshape(-1)`, `:197`), does one
+  `torch.gather` over the whole matrix (`:205`), then a full-size FP32 multiply
+  (`result * scales`, `:208`). The **int64 index unpack is the dominant transient**
+  (`.long()` at `:195-196`; `torch.gather` requires an int64 index, so this is
+  forced): `low`+`high`+stacked hold roughly numel*4 + numel*4 + numel*8 bytes
+  simultaneously, larger than the numel*4 FP32 gather result. For q_proj (2048^2,
+  4.19M) this is tens of MiB; for the gate/up MLP (2048x5632, 11.5M) over a hundred
+  MiB — consistent with P3a's per-layer growth and confirming the compute path (not
+  only allocator retention) creates the workspace.
+- **Q2 — dtype hardcoded vs configurable: HARDCODED FP32 intermediate; only the
+  OUTPUT is cast.** The codebook is `dtype=torch.float32` (`figquant.py:111`) and
+  scales are FP32 (`:93,:104`); the gather output inherits FP32 and the multiply
+  stays FP32. The full matrix is built in FP32 regardless of `x`. The only dtype
+  flexibility is `.to(dtype=x.dtype)` applied AFTER the FP32 build (`linear.py:45`),
+  which adds another full-size copy rather than avoiding the FP32 peak. Implication:
+  a naive BF16 fix at the `.to()` site does NOT reduce peak; BF16 must be pushed
+  INTO the dequant (bf16 codebook + bf16 gather), and even then the numel*8 int64
+  index unpack is dtype-independent and dominates, so BF16-only is expected to be a
+  modest (<~15%) win.
+- **Q3 — backward re-dequant vs saved: RE-DEQUANTIZES FROM SCRATCH; saves only the
+  compact packed rep.** `ctx.save_for_backward(x, indices, codebook, scales)`
+  (`linear.py:47`) saves the input and the packed INT4 trio, NOT W. `backward`
+  rebuilds `q` and calls `figquant_dequantize(q)` again (`linear.py:58-63`), paying
+  the same full-matrix transient a second time. This confirms `saved_tensors_hooks`
+  (the disk-offload idea) cannot catch W — W is never a saved tensor — so backward's
+  memory cost must be attacked at the dequant structure, not via saved-tensor offload.
+- **Q4 — fused-kernel comparison: `fig_fused_linear_lora` does NOT tile.**
+  `_fig_fused_linear_lora_impl` (`figkernel.py:211-230`) takes `cached_W` (an
+  already-dequantized full FP32 matrix) and fuses `F.linear` + LoRA matmuls + scale +
+  add into one inductor kernel (`:228-229`). It reduces kernel launches / vectorizes
+  (AVX-512) but still consumes a full-size W; it merely caches it once at mode-switch
+  (`linear.py:230`) instead of recomputing per call. The hypothesis that the fused
+  kernel already contains tiling to adapt is **REFUTED** — Variant 3 must implement
+  tiling essentially from scratch. (Lowram also applies LoRA as a separate add,
+  `linear.py:213-216`, not fused.)
+
+**What this means for P5b:** Variant 3 (tiling) is the real lever — a tiled dequant
+keeps only a small int64 index chunk and a small BF16 output tile live at once,
+directly attacking the dominant transient that BF16-alone leaves intact. Variant 2
+stays in the plan as the isolated dtype control, but its expected win is modest.
+Variant 3 should also narrow the index handling (avoid a full numel*8 int64 buffer),
+not merely switch the output to BF16. Harness and variants will be built on this
+basis, then surfaced before P5c. No code changed in P5a.
+
 ---
 
 ## Open log
