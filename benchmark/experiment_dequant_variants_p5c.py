@@ -19,7 +19,7 @@ def trim():
 def make_case(shape):
     out, inp = shape; g = torch.Generator().manual_seed(out * 10000 + inp)
     original = torch.randn(shape, generator=g, dtype=torch.float32)
-    return original, figquant_quantize(original, group_size=GROUP_SIZE, double_quant=False)
+    return original, figquant_quantize(original, group_size=GROUP_SIZE, n_iters=1, double_quant=False)
 
 def tiled(q, x, tile):
     out, inp = q.shape; parts=[]; gpr=inp//q.group_size
