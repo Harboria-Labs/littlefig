@@ -296,3 +296,40 @@ Source read complete (no code changed). Citations to committed code:
 Verdict: Variant 3 (tiled BF16, narrowed index handling) is the strongest candidate;
 Variant 2 (BF16-only) is the modest dtype control. P5b harness/variants to be built
 on this basis and surfaced before P5c.
+
+## 2026-08-19 P5b implementation and Colab handoff
+
+Implemented and committed the isolated P5b benchmark:
+
+- `benchmark/experiment_dequant_variants_v1.py`
+- `benchmark/P5b_Dequant_Variants_Colab.ipynb`
+
+The harness compares three clean variants: V1 full FP32 dequantization, V2 full
+BF16 dequantization, and V3 BF16 dequantization tiled over output rows. It supports
+the P3a TinyLlama shapes (`q_proj` 2048x2048 and `mlp_proj` 5632x2048), configurable
+iterations/batch/sequence/tile size, `--results-path`, synthetic `--smoke`, sampled
+RSS peaks, and isolated dequant RSS deltas. A smoke run completed successfully.
+
+Commits on `research/p1-figmezo-verify`:
+
+- `89704e7` initial script and notebook
+- `1c4eb0a` robust results-file verification in notebook
+- `0c00c98` default repository clone and branch configuration
+
+The branch was pushed to the moved repository `Harboria-Labs/littlefig`.
+Direct Colab URL:
+`https://colab.research.google.com/github/Harboria-Labs/littlefig/blob/research/p1-figmezo-verify/benchmark/P5b_Dequant_Variants_Colab.ipynb`
+
+Important Colab issue and fix: the first notebook version left `REPO_URL` blank,
+so Colab stayed in `/content` and failed with
+`python3: can't open file '/content/benchmark/experiment_dequant_variants_v1.py'`;
+the summary cell then failed because `/content/p5b_dequant_variants_results.json`
+did not exist. The current notebook clones the repo automatically, checks out
+`research/p1-figmezo-verify`, runs the script via `subprocess` from the active repo,
+and asserts the results file exists before reading it. Start a fresh Colab runtime,
+open the direct URL, and run cells in order (or Runtime -> Run all). The `jedi`
+missing-package warning is unrelated and may be ignored.
+
+P5b is implemented but not yet run on the full TinyLlama-shaped Colab workload.
+Next step is to execute the updated notebook, inspect V1/V2/V3 RSS and correctness,
+then review results before beginning P5c.
