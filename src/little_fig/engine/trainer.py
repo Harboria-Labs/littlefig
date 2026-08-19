@@ -546,7 +546,20 @@ class FigTrainer:
             active_layers=config.lisa_active_layers,
             switch_interval=config.lisa_switch_interval,
         )
-        lisa_scheduler = LISAScheduler(model.model, lisa_config)
+        # Use one real training batch for the optional sensitivity probe. Build a
+        # fresh iterator so probing does not consume the trainer's dataloader.
+        probe_batch = next(iter(self.dataloader), None)
+        probe_input_ids = None
+        probe_labels = None
+        if probe_batch is not None:
+            probe_input_ids = probe_batch.get("input_ids")
+            probe_labels = probe_batch.get("labels")
+        lisa_scheduler = LISAScheduler(
+            model.model,
+            lisa_config,
+            probe_input_ids=probe_input_ids,
+            probe_labels=probe_labels,
+        )
         
         # Optimizer on trainable params (updated when LISA switches layers)
         trainable_params = lisa_scheduler.get_trainable_params()

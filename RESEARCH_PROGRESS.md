@@ -317,6 +317,12 @@ P4b is paused pending the Colab swap-permission outcome.
   re-enabling, and module traversal order is preserved instead of lexical sorting.
   Source syntax validation passed. A Colab run is still required to measure
   RSS/speed and verify backward correctness.
+- 2026-08-19 - LISA wiring implementation completed: `_train_lisa()` now takes a
+  real batch from a fresh dataloader iterator and passes `input_ids`/`labels` to
+  `LISAScheduler` for its optional sensitivity probe. The probe no longer silently
+  falls back to uniform random selection when a dataset is available. Trainer
+  syntax validation passed. The 8-seed held-out sensitivity-vs-random quality
+  benchmark remains pending; this entry validates wiring only.
 - 2026-08-14 - Added resumable Drive-backed P2 workflow and bounded-memory final
   layer calculations after the corrected 154/156 TinyLlama partial run. The old run
   stopped at `[155/156] START lm_head.weight` with `^C`.

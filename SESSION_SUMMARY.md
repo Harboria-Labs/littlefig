@@ -70,6 +70,14 @@ traversal rather than lexical sorting. `model.py` compiles cleanly. This is
 source-level wiring only; the P4b Colab RSS/speed/correctness comparison remains
 required before declaring a memory improvement validated.
 
+## 2026-08-19 implementation queue: LISA probe wiring complete
+
+`FigTrainer._train_lisa()` now obtains one real batch from a fresh dataloader
+iterator and passes its `input_ids` and `labels` into `LISAScheduler`. This enables
+the scheduler's sensitivity probe without consuming the training iterator. The
+trainer compiles cleanly. The paired GPT-2, 8-seed held-out quality test remains
+required; no claim about the paper's improvement is made yet.
+
 ## 2026-08-18 source activation audit (A1-A4)
 
 - **A1 FigSweep — PARTIALLY wired, inactive in tested lowram path.**
