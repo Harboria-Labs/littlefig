@@ -11,6 +11,10 @@ SHAPES = {"q_proj": (2048, 2048), "k_proj": (2048, 2048), "mlp_proj": (5632, 204
 GROUP_SIZE = 128
 
 def rss(): return psutil.Process(os.getpid()).memory_info().rss / 2**20
+def append_jsonl(path, row):
+    if not path: return
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(row) + "\n"); f.flush(); os.fsync(f.fileno())
 def trim():
     if sys.platform != "linux": return None
     try: return int(ctypes.CDLL("libc.so.6").malloc_trim(0))
@@ -18,7 +22,9 @@ def trim():
 
 def make_case(shape):
     out, inp = shape; g = torch.Generator().manual_seed(out * 10000 + inp)
+    print(f"[P5c worker] allocating source weights {out}x{inp}", flush=True)
     original = torch.randn(shape, generator=g, dtype=torch.float32)
+    print(f"[P5c worker] quantizing source weights {out}x{inp}", flush=True)
     return original, figquant_quantize(original, group_size=GROUP_SIZE, n_iters=1, double_quant=False)
 
 def tiled(q, x, tile):
@@ -50,12 +56,33 @@ def worker(cfg, conn):
     conn.send({"variant":cfg["variant"],"shape":list(shape),"rss_start_mib":start,"rss_peak_mib":peak,"rss_after_gc_mib":after_gc,"rss_after_trim_mib":after_trim,"malloc_trim_return":trim_ret,"wall_ms":elapsed,"max_abs_error":err.max().item(),"rmse":err.pow(2).mean().sqrt().item(),"max_relative_error":relative.max().item()}); print(f"[P5c worker] done {cfg['layer']} {cfg['variant']} iteration {cfg['iteration']} ({elapsed:.1f} ms)", flush=True); conn.close()
 
 def main():
-    ap=argparse.ArgumentParser(); ap.add_argument("--iterations",type=int,default=3); ap.add_argument("--batch",type=int,default=2); ap.add_argument("--seq",type=int,default=256); ap.add_argument("--tile",type=int,default=128); ap.add_argument("--results-path",default="benchmark/p5c_dequant_variants_results.json"); ap.add_argument("--error-tol",type=float,default=0.08)
-    a=ap.parse_args(); rows=[]; ctx=mp.get_context("spawn")
+    ap=argparse.ArgumentParser(); ap.add_argument("--iterations",type=int,default=3); ap.add_argument("--batch",type=int,default=2); ap.add_argument("--seq",type=int,default=256); ap.add_argument("--tile",type=int,default=128); ap.add_argument("--results-path",default="benchmark/p5c_dequant_variants_results.json"); ap.add_argument("--progress-path",default=None); ap.add_argument("--error-tol",type=float,default=0.08); ap.add_argument("--case-timeout",type=float,default=900.0, help="maximum seconds per isolated worker")
+    a=ap.parse_args(); progress=a.progress_path or a.results_path + ".jsonl"; rows=[]; ctx=mp.get_context("spawn")
+    os.makedirs(os.path.dirname(os.path.abspath(progress)),exist_ok=True)
+    if os.path.exists(progress):
+        with open(progress,encoding="utf-8") as f:
+            for line in f:
+                try: event=json.loads(line)
+                except json.JSONDecodeError: continue
+                if event.get("event") == "case_complete":
+                    event.pop("event",None); rows.append(event)
+        print(f"[P5c] resumed {len(rows)} completed case(s) from {progress}",flush=True)
     for layer,shape in SHAPES.items():
         for v in ("v1_fp32_full","v2_bf16_full","v3_bf16_tiled"):
             for i in range(a.iterations):
                 print(f"[P5c] running {layer} {v} iteration {i+1}/{a.iterations}", flush=True)
-                parent,child=ctx.Pipe(False); p=ctx.Process(target=worker,args=({"shape":shape,"variant":v,"batch":a.batch,"seq":a.seq,"tile":a.tile,"iteration":i+1,"layer":layer},child)); p.start(); row=parent.recv(); p.join(); row.update(layer=layer,iteration=i+1,correctness_pass=row["max_abs_error"]<=a.error_tol); rows.append(row); print(f"[P5c] collected {len(rows)} case(s)", flush=True)
+                key=(layer,v,i+1)
+                if any((r.get("layer"),r.get("variant"),r.get("iteration")) == key for r in rows):
+                    print(f"[P5c] skip completed {layer} {v} iteration {i+1}",flush=True); continue
+                append_jsonl(progress,{"event":"case_started","unix_s":time.time(),"layer":layer,"variant":v,"iteration":i+1,"shape":list(shape)})
+                parent,child=ctx.Pipe(False); p=ctx.Process(target=worker,args=({"shape":shape,"variant":v,"batch":a.batch,"seq":a.seq,"tile":a.tile,"iteration":i+1,"layer":layer},child)); p.start(); child.close()
+                if not parent.poll(a.case_timeout):
+                    if p.is_alive(): p.terminate()
+                    p.join(30)
+                    raise TimeoutError(f"P5c worker timed out after {a.case_timeout:.0f}s: {layer} {v} iteration {i+1}")
+                row=parent.recv(); p.join(30)
+                if p.exitcode != 0: raise RuntimeError(f"P5c worker failed with exit code {p.exitcode}: {layer} {v} iteration {i+1}")
+                row.update(layer=layer,iteration=i+1,correctness_pass=row["max_abs_error"]<=a.error_tol); rows.append(row); print(f"[P5c] collected {len(rows)} case(s)", flush=True)
+                append_jsonl(progress, {"event":"case_complete", **row})
     out={"scope":"P5c isolated synthetic FigQuant variants","correctness_reference":"unquantized FP32 weights","error_tolerance_max_abs":a.error_tol,"iterations":a.iterations,"layer_shapes":{k:list(v) for k,v in SHAPES.items()},"cases":rows}; os.makedirs(os.path.dirname(os.path.abspath(a.results_path)),exist_ok=True); json.dump(out,open(a.results_path,"w"),indent=2); print(json.dumps(out,indent=2))
 if __name__ == "__main__": main()
