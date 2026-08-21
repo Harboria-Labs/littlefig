@@ -357,6 +357,35 @@ dominant. `torch.compile` was not pursued because it targets the non-dominant
 loop overhead. V3 is an isolated memory optimization with a genuine CPU speed
 tradeoff; it is not yet wired into the real lowram path.
 
+## P5c newcomer handoff: what was tested and what remains open
+
+P5c is an isolated benchmark for the memory-heavy lowram dequantization step. It
+compares V1 full FP32 dequantization, V2 full BF16 dequantization, and V3 BF16
+dequantization reconstructed in 128-row tiles on TinyLlama-shaped q/k (`2048x2048`)
+and MLP (`5632x2048`) matrices.
+
+The first run was rejected as invalid evidence: it used `n_iters=1` instead of the
+validated production setting `n_iters=8`, and it made `correctness_pass` from
+matmul output error rather than direct weight reconstruction. The corrected
+harness uses `n_iters=8`, synthetic transformer-scale weights (`std=0.02`), direct
+weight RMSE/MSE as the gate, and explicit informational output-RMSE fields.
+
+The corrected smoke passed 9/9 cases. The full 27-case run (three iterations for
+each layer and variant) passed **27/27** weight-level gates. All variants were
+around `0.001845-0.001847` weight RMSE and `3.4e-6` MSE. V3 reduced isolated MLP
+peak RSS to `577.4 MiB`, compared with `706.0 MiB` V1 and `707.7 MiB` V2, about
+18% lower. This is an isolated workspace result, not yet an end-to-end training
+result.
+
+The slowdown profile explains the tradeoff. The MLP has 44 tiles. One tile took
+about 0.322 ms; 44 tiles imply ~14.2 ms of tensor work. The complete tiled loop
+took 284.2 ms, including Python dispatch and temporary/list/concat work. The
+following BF16 CPU `F.linear` took about 3253.5 ms and dominates the ~2.7 s case
+time. The slowdown is primarily a real BF16 CPU matmul/backend cost, not a Python
+loop tax that `torch.compile` would obviously remove. V3 remains unintegrated in
+`linear.py`; deciding whether its memory benefit justifies its throughput penalty
+requires a separate production-path evaluation.
+
 ## 2026-08-22 P5c correctness diagnostic
 
 The completed P5c smoke/full run marked every variant incorrect because its gate

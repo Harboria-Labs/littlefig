@@ -338,6 +338,33 @@ basis, then surfaced before P5c. No code changed in P5a.
 
 ---
 
+### P5c newcomer guide (2026-08-22)
+
+P5c is an isolated investigation of the lowram dequantization workspace. It does
+not modify production `DequantMatmul`. V1 is full FP32 dequantization, V2 is full
+BF16 dequantization, and V3 reconstructs BF16 weights in 128-row tiles. The tested
+TinyLlama-shaped matrices are q/k `2048x2048` and MLP `5632x2048`.
+
+The first run was invalid evidence: it used `n_iters=1` instead of production
+`n_iters=8`, and its correctness gate compared matmul outputs rather than weights.
+On std=1 random weights this produced output RMSE around 4.2, unlike P2's direct
+weight MSE. The harness was corrected to use `n_iters=8`, realistic transformer
+scale (`std=0.02`), and direct dequantized-weight RMSE/MSE for `correctness_pass`.
+Output RMSE remains informational in the JSON.
+
+The corrected smoke passed 9/9 cases. The full run covered 3 iterations x 3
+layers x 3 variants (27 cases) and passed **27/27** weight-level gates. Weight
+RMSE was `0.001845-0.001847` (MSE about `3.4e-6`) for all variants. V3 therefore
+passes isolated correctness.
+
+V3 reduced isolated MLP peak RSS from about 706 MiB (V1) to 577 MiB, about 18%.
+Profiling the 44-tile MLP case found one tile at ~0.322 ms, estimated tensor work
+of ~14.2 ms for all tiles, the complete tiled loop at 284.2 ms, and the following
+BF16 CPU `F.linear` at 3253.5 ms. The slowdown is therefore dominated by BF16 CPU
+matmul/backend compute, not primarily Python loop overhead. V3 is a validated
+isolated memory-saving variant with a genuine CPU throughput cost. It is not wired
+into `linear.py`, and no full P3 TinyLlama rerun has been performed.
+
 ## Open log
 - 2026-08-22 - **P5c V3 slowdown profile: compute/backend cost, not primarily Python overhead.** On the 5632x2048 MLP case (`tile=128`, 44 tiles), one-tile reconstruction averaged `0.322 ms`, implying `~14.2 ms` for 44 tiles. The complete `tiled_weight()` loop including list allocation and concatenation took `284.2 ms`. The subsequent BF16 `F.linear` took `3253.5 ms`; observed V3 case wall time was ~2.6-2.8 s. Python loop overhead exists but cannot explain the slowdown; BF16 CPU matmul/backend performance dominates. No `torch.compile` loop experiment was pursued because overhead is not dominant. V3 remains an isolated memory win with a genuine CPU throughput tradeoff; do not wire it into `linear.py` yet.
 - 2026-08-22 - **P5c corrected gate completed.** The harness now uses production
