@@ -31,8 +31,8 @@ def tiled(q, x, tile):
     out, inp = q.shape; parts=[]; gpr=inp//q.group_size
     for r0 in range(0, out, tile):
         r1=min(out,r0+tile); g0=r0*gpr; g1=r1*gpr
-        p=q.indices[(g0*q.group_size)//2:(g1*q.group_size+1)//2]
-        idx=torch.stack((p&15,(p>>4)&15),1).reshape(-1)[:(g1-g0)*q.group_size].reshape(g1-g0,q.group_size)
+        p=q.indices[(g0*q.group_size)//2:(g1*q.group_size+1)//2].to(torch.int64)
+        idx=torch.stack((p&15,(p>>4)&15),1).reshape(-1)[:(g1-g0)*q.group_size].reshape(g1-g0,q.group_size).to(torch.int64)
         cb=q.codebook.to(torch.bfloat16).unsqueeze(0).expand(g1-g0,-1)
         w=(torch.gather(cb,1,idx)*q.scales[g0:g1].to(torch.bfloat16).unsqueeze(1)).reshape(r1-r0,inp)
         parts.append(F.linear(x.to(w.dtype), w)); del p,idx,cb,w
