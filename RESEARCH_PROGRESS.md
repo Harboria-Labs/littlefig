@@ -339,6 +339,34 @@ basis, then surfaced before P5c. No code changed in P5a.
 ---
 
 ## Open log
+- 2026-08-22 - **P5c corrected gate completed.** The harness now uses production
+  `n_iters=8`, direct dequantized-weight RMSE/MSE as `correctness_pass`, and keeps
+  matmul output RMSE informational. Synthetic weights use std=0.02 to match
+  transformer magnitude. Corrected smoke passed 9/9 cases with weight RMSE
+  `0.001845-0.001847` (MSE about `3.4e-6`). Full run passed **27/27** cases
+  across 3 iterations, 3 layers, and 3 variants. V3 tiled BF16 passed every case.
+  MLP peak RSS was V1 `706.0 MiB`, V2 `707.7 MiB`, V3 `577.4 MiB` (about **18%
+  lower** than V1). V3 was slower in this CPU harness (~2.62-2.82 s vs V1
+  ~0.33-0.36 s for MLP). Conclusion: **V3 is correct and materially reduces
+  isolated dequant workspace, with a throughput tradeoff; end-to-end training
+  impact remains unverified.**
+- 2026-08-22 - **P5c correctness diagnostic: comparison-target/config mismatch, not a
+  quantization accuracy failure.** The P5c worker constructs `ref = F.linear(x,
+  original)` and computes each variant output `y`; its gate is
+  `err = (y.float() - ref.float()).abs()` (`benchmark/experiment_dequant_variants_p5c.py:44,50-55`).
+  Therefore `max_abs_error` is matmul-output error, not direct dequantized-weight
+  error. P2's validated metric is direct reconstruction MSE (`dequantized vs fp32`)
+  and is not comparable to P5c's output RMSE. P5c also used `GROUP_SIZE=128` but
+  `n_iters=1` (`:10-28`), while P2 and the shipped default use `n_iters=8`
+  (`src/little_fig/engine/figquant.py:73-76`; `benchmark/figquant_v2_results.json`).
+  A one-matrix local isolation gave weight RMSE/output RMSE of `0.092678/4.191747`
+  at `n_iters=1` and `0.092280/4.180117` at `n_iters=8`. The large ~4.2 output
+  RMSE is contraction-dimensional matmul error, not evidence of a ~4.2 weight
+  reconstruction error. Classification: **(B) comparison-target mismatch**, with
+  secondary **(A) n_iters configuration mismatch**; **(C) not established**.
+  Existing P5c `correctness_pass=false` rows must not be used to reject V3. The
+  harness must be aligned to `n_iters=8` and direct weight-level comparison before
+  the correctness gate is rerun.
 - 2026-08-14 - Added P3 real-path memory benchmark and Drive-backed Colab wrapper.
   The ~400 MB estimate is evaluated as incremental RSS; the 8 GiB requirement uses
   absolute process RSS. The test defaults to lowram mode and an exact-step local

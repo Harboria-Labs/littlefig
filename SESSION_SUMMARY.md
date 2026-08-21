@@ -333,3 +333,30 @@ missing-package warning is unrelated and may be ignored.
 P5b is implemented but not yet run on the full TinyLlama-shaped Colab workload.
 Next step is to execute the updated notebook, inspect V1/V2/V3 RSS and correctness,
 then review results before beginning P5c.
+
+## 2026-08-22 P5c corrected gate result
+
+The harness now uses production `n_iters=8`, realistic transformer weight scale
+(`std=0.02`), and direct dequantized-weight RMSE/MSE as the `correctness_pass`
+gate. Matmul output RMSE remains separately labeled informational. The smoke test
+passed all 9 cases. The full 27-case run (3 iterations across q_proj, k_proj, and
+mlp_proj) passed **27/27** cases for V1, V2, and V3. Weight RMSE stayed around
+`0.001845-0.001847` (MSE about `3.4e-6`). V3 MLP peak RSS was `577.4 MiB`, versus
+`706.0 MiB` V1 and `707.7 MiB` V2, approximately 18% below V1. V3 was slower on
+CPU (~2.6-2.8 s versus ~0.33-0.36 s for V1 on MLP). Conclusion: **V3 is
+validated for correctness and isolated memory reduction, with a significant
+throughput tradeoff; full-model training impact remains unverified.**
+
+## 2026-08-22 P5c correctness diagnostic
+
+The completed P5c smoke/full run marked every variant incorrect because its gate
+compared matmul outputs, not weights: `ref = F.linear(x, original)` followed by
+`err = (y.float() - ref.float()).abs()` in `benchmark/experiment_dequant_variants_p5c.py`.
+P2's validated result instead measures direct dequantized-weight versus FP32-weight
+reconstruction MSE. P5c also used `group_size=128, n_iters=1`; P2 and the shipped
+FigQuant default use `group_size=128, n_iters=8`. A one-matrix isolation measured
+weight/output RMSE `0.092678/4.191747` at n_iters=1 and `0.092280/4.180117` at
+n_iters=8. Thus the ~4.2 P5c output RMSE is not comparable to P2's ~5.6e-6 weight
+MSE. Classification: **(B) comparison-target mismatch**, secondary **(A) config
+mismatch**, not evidence of **(C)**. Do not declare a variant winner or rerun the
+correctness gate until the harness uses n_iters=8 and direct weight-level comparison.

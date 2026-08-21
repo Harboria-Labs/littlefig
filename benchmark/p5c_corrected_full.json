@@ -1,0 +1,589 @@
+{
+  "scope": "P5c isolated synthetic FigQuant variants",
+  "correctness_reference": "unquantized FP32 weights",
+  "error_tolerance_max_abs": 0.08,
+  "iterations": 3,
+  "layer_shapes": {
+    "q_proj": [
+      2048,
+      2048
+    ],
+    "k_proj": [
+      2048,
+      2048
+    ],
+    "mlp_proj": [
+      5632,
+      2048
+    ]
+  },
+  "cases": [
+    {
+      "variant": "v1_fp32_full",
+      "shape": [
+        2048,
+        2048
+      ],
+      "rss_start_mib": 461.484375,
+      "rss_peak_mib": 495.953125,
+      "rss_after_gc_mib": 488.265625,
+      "rss_after_trim_mib": 488.265625,
+      "malloc_trim_return": null,
+      "wall_ms": 117.16639999940526,
+      "weight_rmse": 0.0018457660917192698,
+      "weight_mse": 3.406852556508966e-06,
+      "output_level_max_abs_error_informational": 0.40710604190826416,
+      "output_level_rmse_informational": 0.08357129991054535,
+      "output_level_max_relative_error_informational": 505321.21875,
+      "layer": "q_proj",
+      "iteration": 1,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v1_fp32_full",
+      "shape": [
+        2048,
+        2048
+      ],
+      "rss_start_mib": 461.69140625,
+      "rss_peak_mib": 496.16015625,
+      "rss_after_gc_mib": 488.47265625,
+      "rss_after_trim_mib": 488.47265625,
+      "malloc_trim_return": null,
+      "wall_ms": 139.094500002102,
+      "weight_rmse": 0.0018457660917192698,
+      "weight_mse": 3.406852556508966e-06,
+      "output_level_max_abs_error_informational": 0.39979469776153564,
+      "output_level_rmse_informational": 0.08340757340192795,
+      "output_level_max_relative_error_informational": 35441.08984375,
+      "layer": "q_proj",
+      "iteration": 2,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v1_fp32_full",
+      "shape": [
+        2048,
+        2048
+      ],
+      "rss_start_mib": 461.71875,
+      "rss_peak_mib": 496.30859375,
+      "rss_after_gc_mib": 488.62109375,
+      "rss_after_trim_mib": 488.62109375,
+      "malloc_trim_return": null,
+      "wall_ms": 117.06859999685548,
+      "weight_rmse": 0.0018457660917192698,
+      "weight_mse": 3.406852556508966e-06,
+      "output_level_max_abs_error_informational": 0.38901108503341675,
+      "output_level_rmse_informational": 0.08368810266256332,
+      "output_level_max_relative_error_informational": 20173.630859375,
+      "layer": "q_proj",
+      "iteration": 3,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v2_bf16_full",
+      "shape": [
+        2048,
+        2048
+      ],
+      "rss_start_mib": 460.9375,
+      "rss_peak_mib": 496.38671875,
+      "rss_after_gc_mib": 490.76171875,
+      "rss_after_trim_mib": 490.76171875,
+      "malloc_trim_return": null,
+      "wall_ms": 1071.1885999917286,
+      "weight_rmse": 0.0018460771534591913,
+      "weight_mse": 3.408000793569954e-06,
+      "output_level_max_abs_error_informational": 0.4137856960296631,
+      "output_level_rmse_informational": 0.08368280529975891,
+      "output_level_max_relative_error_informational": 37574.97265625,
+      "layer": "q_proj",
+      "iteration": 1,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v2_bf16_full",
+      "shape": [
+        2048,
+        2048
+      ],
+      "rss_start_mib": 461.47265625,
+      "rss_peak_mib": 496.921875,
+      "rss_after_gc_mib": 491.296875,
+      "rss_after_trim_mib": 491.296875,
+      "malloc_trim_return": null,
+      "wall_ms": 1137.8268000116805,
+      "weight_rmse": 0.0018460771534591913,
+      "weight_mse": 3.408000793569954e-06,
+      "output_level_max_abs_error_informational": 0.37985873222351074,
+      "output_level_rmse_informational": 0.08339542895555496,
+      "output_level_max_relative_error_informational": 144565.703125,
+      "layer": "q_proj",
+      "iteration": 2,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v2_bf16_full",
+      "shape": [
+        2048,
+        2048
+      ],
+      "rss_start_mib": 461.67578125,
+      "rss_peak_mib": 497.12890625,
+      "rss_after_gc_mib": 491.50390625,
+      "rss_after_trim_mib": 491.50390625,
+      "malloc_trim_return": null,
+      "wall_ms": 976.4777000091271,
+      "weight_rmse": 0.0018460771534591913,
+      "weight_mse": 3.408000793569954e-06,
+      "output_level_max_abs_error_informational": 0.4763275980949402,
+      "output_level_rmse_informational": 0.08358315378427505,
+      "output_level_max_relative_error_informational": 78821.328125,
+      "layer": "q_proj",
+      "iteration": 3,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v3_bf16_tiled",
+      "shape": [
+        2048,
+        2048
+      ],
+      "rss_start_mib": 461.2265625,
+      "rss_peak_mib": 465.2578125,
+      "rss_after_gc_mib": 439.609375,
+      "rss_after_trim_mib": 439.609375,
+      "malloc_trim_return": null,
+      "wall_ms": 1094.4335000094725,
+      "weight_rmse": 0.001846860395744443,
+      "weight_mse": 3.410893441468943e-06,
+      "output_level_max_abs_error_informational": 0.42249250411987305,
+      "output_level_rmse_informational": 0.08359064906835556,
+      "output_level_max_relative_error_informational": 358399.0,
+      "layer": "q_proj",
+      "iteration": 1,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v3_bf16_tiled",
+      "shape": [
+        2048,
+        2048
+      ],
+      "rss_start_mib": 461.66796875,
+      "rss_peak_mib": 465.703125,
+      "rss_after_gc_mib": 440.0546875,
+      "rss_after_trim_mib": 440.0546875,
+      "malloc_trim_return": null,
+      "wall_ms": 1012.1988000028068,
+      "weight_rmse": 0.001846860395744443,
+      "weight_mse": 3.410893441468943e-06,
+      "output_level_max_abs_error_informational": 0.3954232931137085,
+      "output_level_rmse_informational": 0.08367588371038437,
+      "output_level_max_relative_error_informational": 306236.5,
+      "layer": "q_proj",
+      "iteration": 2,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v3_bf16_tiled",
+      "shape": [
+        2048,
+        2048
+      ],
+      "rss_start_mib": 461.2421875,
+      "rss_peak_mib": 465.28515625,
+      "rss_after_gc_mib": 439.63671875,
+      "rss_after_trim_mib": 439.63671875,
+      "malloc_trim_return": null,
+      "wall_ms": 1053.151700005401,
+      "weight_rmse": 0.001846860395744443,
+      "weight_mse": 3.410893441468943e-06,
+      "output_level_max_abs_error_informational": 0.4205329716205597,
+      "output_level_rmse_informational": 0.0836939886212349,
+      "output_level_max_relative_error_informational": 74637.21875,
+      "layer": "q_proj",
+      "iteration": 3,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v1_fp32_full",
+      "shape": [
+        2048,
+        2048
+      ],
+      "rss_start_mib": 462.25390625,
+      "rss_peak_mib": 496.703125,
+      "rss_after_gc_mib": 489.015625,
+      "rss_after_trim_mib": 489.015625,
+      "malloc_trim_return": null,
+      "wall_ms": 248.47029999364167,
+      "weight_rmse": 0.0018457660917192698,
+      "weight_mse": 3.406852556508966e-06,
+      "output_level_max_abs_error_informational": 0.39339137077331543,
+      "output_level_rmse_informational": 0.0835728794336319,
+      "output_level_max_relative_error_informational": 73945.09375,
+      "layer": "k_proj",
+      "iteration": 1,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v1_fp32_full",
+      "shape": [
+        2048,
+        2048
+      ],
+      "rss_start_mib": 461.46875,
+      "rss_peak_mib": 495.91796875,
+      "rss_after_gc_mib": 488.23046875,
+      "rss_after_trim_mib": 488.23046875,
+      "malloc_trim_return": null,
+      "wall_ms": 123.87480000325013,
+      "weight_rmse": 0.0018457660917192698,
+      "weight_mse": 3.406852556508966e-06,
+      "output_level_max_abs_error_informational": 0.38659822940826416,
+      "output_level_rmse_informational": 0.0834784135222435,
+      "output_level_max_relative_error_informational": 183076.6875,
+      "layer": "k_proj",
+      "iteration": 2,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v1_fp32_full",
+      "shape": [
+        2048,
+        2048
+      ],
+      "rss_start_mib": 461.4921875,
+      "rss_peak_mib": 495.95703125,
+      "rss_after_gc_mib": 488.26953125,
+      "rss_after_trim_mib": 488.26953125,
+      "malloc_trim_return": null,
+      "wall_ms": 116.3486000004923,
+      "weight_rmse": 0.0018457660917192698,
+      "weight_mse": 3.406852556508966e-06,
+      "output_level_max_abs_error_informational": 0.421047568321228,
+      "output_level_rmse_informational": 0.08355240523815155,
+      "output_level_max_relative_error_informational": 38716.02734375,
+      "layer": "k_proj",
+      "iteration": 3,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v2_bf16_full",
+      "shape": [
+        2048,
+        2048
+      ],
+      "rss_start_mib": 461.3046875,
+      "rss_peak_mib": 496.78125,
+      "rss_after_gc_mib": 491.15625,
+      "rss_after_trim_mib": 491.15625,
+      "malloc_trim_return": null,
+      "wall_ms": 981.6687000129605,
+      "weight_rmse": 0.0018460771534591913,
+      "weight_mse": 3.408000793569954e-06,
+      "output_level_max_abs_error_informational": 0.4428938031196594,
+      "output_level_rmse_informational": 0.08365703374147415,
+      "output_level_max_relative_error_informational": 168208.0625,
+      "layer": "k_proj",
+      "iteration": 1,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v2_bf16_full",
+      "shape": [
+        2048,
+        2048
+      ],
+      "rss_start_mib": 461.12890625,
+      "rss_peak_mib": 496.625,
+      "rss_after_gc_mib": 491.0,
+      "rss_after_trim_mib": 491.0,
+      "malloc_trim_return": null,
+      "wall_ms": 1123.1552999961423,
+      "weight_rmse": 0.0018460771534591913,
+      "weight_mse": 3.408000793569954e-06,
+      "output_level_max_abs_error_informational": 0.4175345301628113,
+      "output_level_rmse_informational": 0.0835653766989708,
+      "output_level_max_relative_error_informational": 74611.21875,
+      "layer": "k_proj",
+      "iteration": 2,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v2_bf16_full",
+      "shape": [
+        2048,
+        2048
+      ],
+      "rss_start_mib": 461.2734375,
+      "rss_peak_mib": 496.76953125,
+      "rss_after_gc_mib": 491.14453125,
+      "rss_after_trim_mib": 491.14453125,
+      "malloc_trim_return": null,
+      "wall_ms": 1023.6136000021361,
+      "weight_rmse": 0.0018460771534591913,
+      "weight_mse": 3.408000793569954e-06,
+      "output_level_max_abs_error_informational": 0.43655824661254883,
+      "output_level_rmse_informational": 0.08351457118988037,
+      "output_level_max_relative_error_informational": 69906.0703125,
+      "layer": "k_proj",
+      "iteration": 3,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v3_bf16_tiled",
+      "shape": [
+        2048,
+        2048
+      ],
+      "rss_start_mib": 461.6953125,
+      "rss_peak_mib": 465.68359375,
+      "rss_after_gc_mib": 440.03515625,
+      "rss_after_trim_mib": 440.03515625,
+      "malloc_trim_return": null,
+      "wall_ms": 1013.818799998262,
+      "weight_rmse": 0.001846860395744443,
+      "weight_mse": 3.410893441468943e-06,
+      "output_level_max_abs_error_informational": 0.39758002758026123,
+      "output_level_rmse_informational": 0.0836883932352066,
+      "output_level_max_relative_error_informational": 145869.453125,
+      "layer": "k_proj",
+      "iteration": 1,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v3_bf16_tiled",
+      "shape": [
+        2048,
+        2048
+      ],
+      "rss_start_mib": 461.9140625,
+      "rss_peak_mib": 465.9453125,
+      "rss_after_gc_mib": 440.296875,
+      "rss_after_trim_mib": 440.296875,
+      "malloc_trim_return": null,
+      "wall_ms": 1183.5990999970818,
+      "weight_rmse": 0.001846860395744443,
+      "weight_mse": 3.410893441468943e-06,
+      "output_level_max_abs_error_informational": 0.4204012155532837,
+      "output_level_rmse_informational": 0.0836317390203476,
+      "output_level_max_relative_error_informational": 28342.390625,
+      "layer": "k_proj",
+      "iteration": 2,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v3_bf16_tiled",
+      "shape": [
+        2048,
+        2048
+      ],
+      "rss_start_mib": 461.15625,
+      "rss_peak_mib": 465.1484375,
+      "rss_after_gc_mib": 439.5,
+      "rss_after_trim_mib": 439.5,
+      "malloc_trim_return": null,
+      "wall_ms": 1089.1755000047851,
+      "weight_rmse": 0.001846860395744443,
+      "weight_mse": 3.410893441468943e-06,
+      "output_level_max_abs_error_informational": 0.4120488166809082,
+      "output_level_rmse_informational": 0.08355333656072617,
+      "output_level_max_relative_error_informational": 32938.78125,
+      "layer": "k_proj",
+      "iteration": 3,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v1_fp32_full",
+      "shape": [
+        5632,
+        2048
+      ],
+      "rss_start_mib": 553.8125,
+      "rss_peak_mib": 705.99609375,
+      "rss_after_gc_mib": 677.62109375,
+      "rss_after_trim_mib": 677.62109375,
+      "malloc_trim_return": null,
+      "wall_ms": 346.97589999996126,
+      "weight_rmse": 0.001844836981035769,
+      "weight_mse": 3.4034235341096064e-06,
+      "output_level_max_abs_error_informational": 0.4580528736114502,
+      "output_level_rmse_informational": 0.08363817632198334,
+      "output_level_max_relative_error_informational": 34910.9609375,
+      "layer": "mlp_proj",
+      "iteration": 1,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v1_fp32_full",
+      "shape": [
+        5632,
+        2048
+      ],
+      "rss_start_mib": 552.8203125,
+      "rss_peak_mib": 693.00390625,
+      "rss_after_gc_mib": 675.81640625,
+      "rss_after_trim_mib": 675.81640625,
+      "malloc_trim_return": null,
+      "wall_ms": 357.88680000405293,
+      "weight_rmse": 0.001844836981035769,
+      "weight_mse": 3.4034235341096064e-06,
+      "output_level_max_abs_error_informational": 0.4342769980430603,
+      "output_level_rmse_informational": 0.08349685370922089,
+      "output_level_max_relative_error_informational": 380610.6875,
+      "layer": "mlp_proj",
+      "iteration": 2,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v1_fp32_full",
+      "shape": [
+        5632,
+        2048
+      ],
+      "rss_start_mib": 553.81640625,
+      "rss_peak_mib": 706.0234375,
+      "rss_after_gc_mib": 677.6484375,
+      "rss_after_trim_mib": 677.6484375,
+      "malloc_trim_return": null,
+      "wall_ms": 332.3956999956863,
+      "weight_rmse": 0.001844836981035769,
+      "weight_mse": 3.4034235341096064e-06,
+      "output_level_max_abs_error_informational": 0.4346294403076172,
+      "output_level_rmse_informational": 0.08343309164047241,
+      "output_level_max_relative_error_informational": 1168468.625,
+      "layer": "mlp_proj",
+      "iteration": 3,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v2_bf16_full",
+      "shape": [
+        5632,
+        2048
+      ],
+      "rss_start_mib": 554.078125,
+      "rss_peak_mib": 707.40234375,
+      "rss_after_gc_mib": 701.62109375,
+      "rss_after_trim_mib": 701.62109375,
+      "malloc_trim_return": null,
+      "wall_ms": 2605.1393000088865,
+      "weight_rmse": 0.0018451458308845758,
+      "weight_mse": 3.404563130970928e-06,
+      "output_level_max_abs_error_informational": 0.4292130470275879,
+      "output_level_rmse_informational": 0.0835934728384018,
+      "output_level_max_relative_error_informational": 1228799.0,
+      "layer": "mlp_proj",
+      "iteration": 1,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v2_bf16_full",
+      "shape": [
+        5632,
+        2048
+      ],
+      "rss_start_mib": 554.37109375,
+      "rss_peak_mib": 707.69921875,
+      "rss_after_gc_mib": 701.91796875,
+      "rss_after_trim_mib": 701.91796875,
+      "malloc_trim_return": null,
+      "wall_ms": 2829.60459998867,
+      "weight_rmse": 0.0018451458308845758,
+      "weight_mse": 3.404563130970928e-06,
+      "output_level_max_abs_error_informational": 0.43045639991760254,
+      "output_level_rmse_informational": 0.08354281634092331,
+      "output_level_max_relative_error_informational": 277163.65625,
+      "layer": "mlp_proj",
+      "iteration": 2,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v2_bf16_full",
+      "shape": [
+        5632,
+        2048
+      ],
+      "rss_start_mib": 553.9609375,
+      "rss_peak_mib": 685.1796875,
+      "rss_after_gc_mib": 699.6484375,
+      "rss_after_trim_mib": 699.6484375,
+      "malloc_trim_return": null,
+      "wall_ms": 2760.499800002435,
+      "weight_rmse": 0.0018451458308845758,
+      "weight_mse": 3.404563130970928e-06,
+      "output_level_max_abs_error_informational": 0.43500494956970215,
+      "output_level_rmse_informational": 0.08349906653165817,
+      "output_level_max_relative_error_informational": 119860.8984375,
+      "layer": "mlp_proj",
+      "iteration": 3,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v3_bf16_tiled",
+      "shape": [
+        5632,
+        2048
+      ],
+      "rss_start_mib": 553.76953125,
+      "rss_peak_mib": 577.3828125,
+      "rss_after_gc_mib": 584.9296875,
+      "rss_after_trim_mib": 584.9296875,
+      "malloc_trim_return": null,
+      "wall_ms": 2769.8393000027863,
+      "weight_rmse": 0.0018453518860042095,
+      "weight_mse": 3.4053236959152855e-06,
+      "output_level_max_abs_error_informational": 0.4768897294998169,
+      "output_level_rmse_informational": 0.08358240872621536,
+      "output_level_max_relative_error_informational": 167935.0,
+      "layer": "mlp_proj",
+      "iteration": 1,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v3_bf16_tiled",
+      "shape": [
+        5632,
+        2048
+      ],
+      "rss_start_mib": 553.734375,
+      "rss_peak_mib": 577.37109375,
+      "rss_after_gc_mib": 584.91796875,
+      "rss_after_trim_mib": 584.91796875,
+      "malloc_trim_return": null,
+      "wall_ms": 2623.759099995368,
+      "weight_rmse": 0.0018453518860042095,
+      "weight_mse": 3.4053236959152855e-06,
+      "output_level_max_abs_error_informational": 0.42081594467163086,
+      "output_level_rmse_informational": 0.08348128944635391,
+      "output_level_max_relative_error_informational": 256902.109375,
+      "layer": "mlp_proj",
+      "iteration": 2,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v3_bf16_tiled",
+      "shape": [
+        5632,
+        2048
+      ],
+      "rss_start_mib": 553.7578125,
+      "rss_peak_mib": 572.90625,
+      "rss_after_gc_mib": 583.953125,
+      "rss_after_trim_mib": 583.953125,
+      "malloc_trim_return": null,
+      "wall_ms": 2819.127499999013,
+      "weight_rmse": 0.0018453518860042095,
+      "weight_mse": 3.4053236959152855e-06,
+      "output_level_max_abs_error_informational": 0.4408600330352783,
+      "output_level_rmse_informational": 0.0836852416396141,
+      "output_level_max_relative_error_informational": 603476.3125,
+      "layer": "mlp_proj",
+      "iteration": 3,
+      "correctness_pass": true
+    }
+  ]
+}

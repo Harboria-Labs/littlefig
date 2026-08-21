@@ -1,0 +1,211 @@
+{
+  "scope": "P5c isolated synthetic FigQuant variants",
+  "correctness_reference": "unquantized FP32 weights",
+  "error_tolerance_max_abs": 0.08,
+  "iterations": 1,
+  "layer_shapes": {
+    "q_proj": [
+      2048,
+      2048
+    ],
+    "k_proj": [
+      2048,
+      2048
+    ],
+    "mlp_proj": [
+      5632,
+      2048
+    ]
+  },
+  "cases": [
+    {
+      "variant": "v1_fp32_full",
+      "shape": [
+        2048,
+        2048
+      ],
+      "rss_start_mib": 455.19140625,
+      "rss_peak_mib": 473.2734375,
+      "rss_after_gc_mib": 469.9609375,
+      "rss_after_trim_mib": 469.9609375,
+      "malloc_trim_return": null,
+      "wall_ms": 53.213199993479066,
+      "weight_rmse": 0.0018457660917192698,
+      "weight_mse": 3.406852556508966e-06,
+      "output_level_max_abs_error_informational": 0.3467658758163452,
+      "output_level_rmse_informational": 0.0830981433391571,
+      "output_level_max_relative_error_informational": 16154.181640625,
+      "layer": "q_proj",
+      "iteration": 1,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v2_bf16_full",
+      "shape": [
+        2048,
+        2048
+      ],
+      "rss_start_mib": 455.546875,
+      "rss_peak_mib": 477.84375,
+      "rss_after_gc_mib": 470.40625,
+      "rss_after_trim_mib": 470.40625,
+      "malloc_trim_return": null,
+      "wall_ms": 83.92429999366868,
+      "weight_rmse": 0.0018460771534591913,
+      "weight_mse": 3.408000793569954e-06,
+      "output_level_max_abs_error_informational": 0.3561463952064514,
+      "output_level_rmse_informational": 0.08379916101694107,
+      "output_level_max_relative_error_informational": 1764.57958984375,
+      "layer": "q_proj",
+      "iteration": 1,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v3_bf16_tiled",
+      "shape": [
+        2048,
+        2048
+      ],
+      "rss_start_mib": 455.2890625,
+      "rss_peak_mib": 462.4921875,
+      "rss_after_gc_mib": 438.5546875,
+      "rss_after_trim_mib": 438.5546875,
+      "malloc_trim_return": null,
+      "wall_ms": 92.08309999667108,
+      "weight_rmse": 0.001846860395744443,
+      "weight_mse": 3.410893441468943e-06,
+      "output_level_max_abs_error_informational": 0.38865038752555847,
+      "output_level_rmse_informational": 0.08285708725452423,
+      "output_level_max_relative_error_informational": 500.2195129394531,
+      "layer": "q_proj",
+      "iteration": 1,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v1_fp32_full",
+      "shape": [
+        2048,
+        2048
+      ],
+      "rss_start_mib": 456.16796875,
+      "rss_peak_mib": 474.25,
+      "rss_after_gc_mib": 470.9375,
+      "rss_after_trim_mib": 470.9375,
+      "malloc_trim_return": null,
+      "wall_ms": 53.357900003902614,
+      "weight_rmse": 0.0018457660917192698,
+      "weight_mse": 3.406852556508966e-06,
+      "output_level_max_abs_error_informational": 0.3723883628845215,
+      "output_level_rmse_informational": 0.08327396214008331,
+      "output_level_max_relative_error_informational": 8078.1064453125,
+      "layer": "k_proj",
+      "iteration": 1,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v2_bf16_full",
+      "shape": [
+        2048,
+        2048
+      ],
+      "rss_start_mib": 455.67578125,
+      "rss_peak_mib": 477.94140625,
+      "rss_after_gc_mib": 470.50390625,
+      "rss_after_trim_mib": 470.50390625,
+      "malloc_trim_return": null,
+      "wall_ms": 77.5331000040751,
+      "weight_rmse": 0.0018460771534591913,
+      "weight_mse": 3.408000793569954e-06,
+      "output_level_max_abs_error_informational": 0.3832186162471771,
+      "output_level_rmse_informational": 0.08351988345384598,
+      "output_level_max_relative_error_informational": 6064.9306640625,
+      "layer": "k_proj",
+      "iteration": 1,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v3_bf16_tiled",
+      "shape": [
+        2048,
+        2048
+      ],
+      "rss_start_mib": 455.5625,
+      "rss_peak_mib": 462.8203125,
+      "rss_after_gc_mib": 438.8828125,
+      "rss_after_trim_mib": 438.8828125,
+      "malloc_trim_return": null,
+      "wall_ms": 172.3137999942992,
+      "weight_rmse": 0.001846860395744443,
+      "weight_mse": 3.410893441468943e-06,
+      "output_level_max_abs_error_informational": 0.3482024669647217,
+      "output_level_rmse_informational": 0.08324459195137024,
+      "output_level_max_relative_error_informational": 625.743408203125,
+      "layer": "k_proj",
+      "iteration": 1,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v1_fp32_full",
+      "shape": [
+        5632,
+        2048
+      ],
+      "rss_start_mib": 546.03515625,
+      "rss_peak_mib": 677.36328125,
+      "rss_after_gc_mib": 658.42578125,
+      "rss_after_trim_mib": 658.42578125,
+      "malloc_trim_return": null,
+      "wall_ms": 180.02089999208692,
+      "weight_rmse": 0.001844836981035769,
+      "weight_mse": 3.4034235341096064e-06,
+      "output_level_max_abs_error_informational": 0.3703872561454773,
+      "output_level_rmse_informational": 0.08347615599632263,
+      "output_level_max_relative_error_informational": 56441.0703125,
+      "layer": "mlp_proj",
+      "iteration": 1,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v2_bf16_full",
+      "shape": [
+        5632,
+        2048
+      ],
+      "rss_start_mib": 545.94921875,
+      "rss_peak_mib": 677.19140625,
+      "rss_after_gc_mib": 658.42578125,
+      "rss_after_trim_mib": 658.42578125,
+      "malloc_trim_return": null,
+      "wall_ms": 244.9161999975331,
+      "weight_rmse": 0.0018451458308845758,
+      "weight_mse": 3.404563130970928e-06,
+      "output_level_max_abs_error_informational": 0.39980101585388184,
+      "output_level_rmse_informational": 0.08389300853013992,
+      "output_level_max_relative_error_informational": 1988.4227294921875,
+      "layer": "mlp_proj",
+      "iteration": 1,
+      "correctness_pass": true
+    },
+    {
+      "variant": "v3_bf16_tiled",
+      "shape": [
+        5632,
+        2048
+      ],
+      "rss_start_mib": 545.859375,
+      "rss_peak_mib": 560.05859375,
+      "rss_after_gc_mib": 526.75390625,
+      "rss_after_trim_mib": 526.75390625,
+      "malloc_trim_return": null,
+      "wall_ms": 250.16609999875072,
+      "weight_rmse": 0.0018453518860042095,
+      "weight_mse": 3.4053236959152855e-06,
+      "output_level_max_abs_error_informational": 0.37167418003082275,
+      "output_level_rmse_informational": 0.0836261585354805,
+      "output_level_max_relative_error_informational": 1820.2340087890625,
+      "layer": "mlp_proj",
+      "iteration": 1,
+      "correctness_pass": true
+    }
+  ]
+}
