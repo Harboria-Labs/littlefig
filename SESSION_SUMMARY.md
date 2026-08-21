@@ -347,6 +347,16 @@ CPU (~2.6-2.8 s versus ~0.33-0.36 s for V1 on MLP). Conclusion: **V3 is
 validated for correctness and isolated memory reduction, with a significant
 throughput tradeoff; full-model training impact remains unverified.**
 
+## 2026-08-22 P5c V3 slowdown profile
+
+The MLP profile (5632x2048, 44 tiles) measured one tile at ~0.322 ms, estimated
+44-tile tensor work at ~14.2 ms, complete `tiled_weight()` loop at 284.2 ms, and
+the following BF16 CPU `F.linear` at 3253.5 ms. Thus Python/list/concat overhead is
+not the main cause of V3's ~2.7 s case time; BF16 CPU matmul/backend compute is
+dominant. `torch.compile` was not pursued because it targets the non-dominant
+loop overhead. V3 is an isolated memory optimization with a genuine CPU speed
+tradeoff; it is not yet wired into the real lowram path.
+
 ## 2026-08-22 P5c correctness diagnostic
 
 The completed P5c smoke/full run marked every variant incorrect because its gate

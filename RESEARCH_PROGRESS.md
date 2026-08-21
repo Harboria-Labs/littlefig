@@ -339,6 +339,7 @@ basis, then surfaced before P5c. No code changed in P5a.
 ---
 
 ## Open log
+- 2026-08-22 - **P5c V3 slowdown profile: compute/backend cost, not primarily Python overhead.** On the 5632x2048 MLP case (`tile=128`, 44 tiles), one-tile reconstruction averaged `0.322 ms`, implying `~14.2 ms` for 44 tiles. The complete `tiled_weight()` loop including list allocation and concatenation took `284.2 ms`. The subsequent BF16 `F.linear` took `3253.5 ms`; observed V3 case wall time was ~2.6-2.8 s. Python loop overhead exists but cannot explain the slowdown; BF16 CPU matmul/backend performance dominates. No `torch.compile` loop experiment was pursued because overhead is not dominant. V3 remains an isolated memory win with a genuine CPU throughput tradeoff; do not wire it into `linear.py` yet.
 - 2026-08-22 - **P5c corrected gate completed.** The harness now uses production
   `n_iters=8`, direct dequantized-weight RMSE/MSE as `correctness_pass`, and keeps
   matmul output RMSE informational. Synthetic weights use std=0.02 to match
