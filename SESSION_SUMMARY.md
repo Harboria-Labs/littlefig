@@ -413,3 +413,20 @@ n_iters=8. Thus the ~4.2 P5c output RMSE is not comparable to P2's ~5.6e-6 weigh
 MSE. Classification: **(B) comparison-target mismatch**, secondary **(A) config
 mismatch**, not evidence of **(C)**. Do not declare a variant winner or rerun the
 correctness gate until the harness uses n_iters=8 and direct weight-level comparison.
+## 2026-08-22 P6a envelope calculation: blocked by local storage
+
+P6a was started in the required order with `benchmark/experiment_envelope_v1.py`.
+The script is designed to measure sequential read bandwidth on the current machine
+using a temporary 512 MiB fixture, then extrapolate the committed P5c MLP profile
+(`5632x2048`, tile 128, dequant `0.2842 s`, GEMM `3.2535 s`, batch 2, sequence 256)
+to reference decoder layer shapes for a Gemma-class 4B model (hidden 2560,
+intermediate 10240, 34 layers), an 8B-class model (4096, 14336, 32 layers), and a
+26B-class model (5120, 20480, 48 layers).
+
+The run did not reach the bandwidth read. Fixture creation failed with
+`OSError: [Errno 28] No space left on device`; the local C: drive reported zero
+free space. Therefore there is no measured sequential bandwidth, no durable envelope
+JSON, and no honest I/O-versus-dequant-versus-GEMM bottleneck verdict yet. This is an
+environmental block, not evidence that I/O or compute dominates. P6b and every later
+stage remain gated until P6a is rerun on the actual target hardware with sufficient
+storage. No substitute bandwidth number or invented conclusion was used.
