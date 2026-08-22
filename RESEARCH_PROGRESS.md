@@ -503,6 +503,19 @@ into `linear.py`, and no full P3 TinyLlama rerun has been performed.
   lower MSE vs NF4. TinyLlama 156/156 result still pending.
 
 - 2026-08-06 — Initial codebase + 4-paper review. Found contradictions #1–#4 above.
+- 2026-08-22 - **P6a local-PC replication completed.** On Windows PowerShell with
+  Python 3.13.5 and the local C: NTFS drive (4.554 GiB free at measurement), the
+  canonical 512 MiB fixture and three 8 MiB-block reads measured
+  **0.381690 GiB/s** conservatively (samples 0.381690, 0.407372, 0.391624).
+  The durable result is `benchmark/envelope_v1_results.json`. Projected forward
+  totals were Gemma 4B I/O/dequant/GEMM **4.621372/87.843636/1005.627273 s**,
+  Llama 8B **10.090854/191.809164/2195.816727 s**, and 26B
+  **26.097000/496.058182/5678.836364 s**. Verdict: **GEMM remains the projected
+  bottleneck at all three scales**. Compared with Colab's 4.174697 GiB/s, local
+  storage is ~10.94x slower, but I/O still does not dominate the projection.
+  This is a hardware replication, not a replacement for Colab evidence. With
+  both hardware records complete, P6a is closed; P6b remains unnecessary under
+  the current gate because P6a did not show I/O binding.
 - 2026-08-22 - P6a Colab completed: conservative sequential read bandwidth
   **4.174697 GiB/s**. Projected totals were Gemma 4B I/O/dequant/GEMM
   **0.422529/87.843636/1005.627273 s**, 8B **0.922600/191.809164/2195.816727 s**,

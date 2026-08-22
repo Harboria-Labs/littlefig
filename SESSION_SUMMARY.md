@@ -468,3 +468,19 @@ rates, projected forward totals were: Gemma-class 4B I/O **0.423 s**, dequant
 Verdict: **✅ proven Colab envelope; GEMM bottleneck at all scales**. This is a
 projection, not a full-model run. Local-PC replication remains pending after reboot;
 P6b stays gated.
+
+## 2026-08-22 P6a local-PC result
+
+The canonical local replication completed after disk recovery using
+`benchmark/experiment_envelope_v1.py`. Windows PowerShell / Python 3.13.5 on the
+local C: NTFS drive measured three 512 MiB sequential reads at
+**0.381690, 0.407372, and 0.391624 GiB/s**; the conservative rate is
+**0.381690 GiB/s**. Durable JSON: `benchmark/envelope_v1_results.json`.
+
+Projected forward totals were Gemma 4B **4.621372/87.843636/1005.627273 s**,
+Llama 8B **10.090854/191.809164/2195.816727 s**, and 26B
+**26.097000/496.058182/5678.836364 s** for I/O/dequant/GEMM. Verdict:
+**GEMM remains the projected bottleneck at all scales**. Local storage is about
+10.94x slower than Colab's 4.174697 GiB/s, but does not become the bottleneck.
+This is separate hardware evidence. With both hardware records complete, P6a is
+closed; P6b remains unnecessary under the current gate because I/O was not binding.

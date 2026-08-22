@@ -1,0 +1,324 @@
+{
+  "scope": "P6a forward-pass envelope; target hardware sequential read plus P5c CPU rates",
+  "architecture_assumptions": "Reference decoder-only shapes; projections, not measured model runs.",
+  "workload": {
+    "batch": 2,
+    "sequence_length": 256
+  },
+  "read_bandwidth": {
+    "file_size_mib": 512,
+    "block_mib": 8,
+    "samples": [
+      {
+        "bytes": 536870912,
+        "seconds": 1.3099644000000126,
+        "gib_s": 0.38168976195077914
+      },
+      {
+        "bytes": 536870912,
+        "seconds": 1.2273795999999493,
+        "gib_s": 0.40737193285599715
+      },
+      {
+        "bytes": 536870912,
+        "seconds": 1.2767340000000331,
+        "gib_s": 0.3916242537599743
+      }
+    ],
+    "conservative_gib_s": 0.38168976195077914
+  },
+  "measured_rate_sources": {
+    "p5c_profile": {
+      "out": 5632,
+      "inp": 2048,
+      "dequant_s": 0.2842,
+      "gemm_s": 3.2535,
+      "batch": 2,
+      "seq": 256,
+      "tile_rows": 128
+    },
+    "dequant_weights_per_s": 40585277.973258264,
+    "gemm_flops_per_s": 3630293549.715691
+  },
+  "models": {
+    "gemma_class_4b": {
+      "config": {
+        "hidden": 2560,
+        "intermediate": 10240,
+        "layers": 34
+      },
+      "per_layer_matrices": [
+        {
+          "matrix": "q",
+          "shape": [
+            2560,
+            2560
+          ],
+          "packed_mib": 3.32037353515625,
+          "io_s": 0.008495256104993902,
+          "dequant_s": 0.16147727272727275,
+          "gemm_s": 1.8485795454545453
+        },
+        {
+          "matrix": "k",
+          "shape": [
+            2560,
+            2560
+          ],
+          "packed_mib": 3.32037353515625,
+          "io_s": 0.008495256104993902,
+          "dequant_s": 0.16147727272727275,
+          "gemm_s": 1.8485795454545453
+        },
+        {
+          "matrix": "v",
+          "shape": [
+            2560,
+            2560
+          ],
+          "packed_mib": 3.32037353515625,
+          "io_s": 0.008495256104993902,
+          "dequant_s": 0.16147727272727275,
+          "gemm_s": 1.8485795454545453
+        },
+        {
+          "matrix": "o",
+          "shape": [
+            2560,
+            2560
+          ],
+          "packed_mib": 3.32037353515625,
+          "io_s": 0.008495256104993902,
+          "dequant_s": 0.16147727272727275,
+          "gemm_s": 1.8485795454545453
+        },
+        {
+          "matrix": "gate",
+          "shape": [
+            10240,
+            2560
+          ],
+          "packed_mib": 13.28131103515625,
+          "io_s": 0.03398055594019922,
+          "dequant_s": 0.645909090909091,
+          "gemm_s": 7.394318181818181
+        },
+        {
+          "matrix": "up",
+          "shape": [
+            10240,
+            2560
+          ],
+          "packed_mib": 13.28131103515625,
+          "io_s": 0.03398055594019922,
+          "dequant_s": 0.645909090909091,
+          "gemm_s": 7.394318181818181
+        },
+        {
+          "matrix": "down",
+          "shape": [
+            2560,
+            10240
+          ],
+          "packed_mib": 13.28131103515625,
+          "io_s": 0.03398055594019922,
+          "dequant_s": 0.645909090909091,
+          "gemm_s": 7.394318181818181
+        }
+      ],
+      "model_packed_gib": 1.7639302015304565,
+      "projected_forward_totals_s": {
+        "io_s": 4.621371536179491,
+        "dequant_s": 87.84363636363638,
+        "gemm_s": 1005.6272727272726
+      },
+      "bottleneck": "gemm_s"
+    },
+    "llama_class_8b": {
+      "config": {
+        "hidden": 4096,
+        "intermediate": 14336,
+        "layers": 32
+      },
+      "per_layer_matrices": [
+        {
+          "matrix": "q",
+          "shape": [
+            4096,
+            4096
+          ],
+          "packed_mib": 8.50006103515625,
+          "io_s": 0.021747612019300668,
+          "dequant_s": 0.41338181818181824,
+          "gemm_s": 4.732363636363636
+        },
+        {
+          "matrix": "k",
+          "shape": [
+            4096,
+            4096
+          ],
+          "packed_mib": 8.50006103515625,
+          "io_s": 0.021747612019300668,
+          "dequant_s": 0.41338181818181824,
+          "gemm_s": 4.732363636363636
+        },
+        {
+          "matrix": "v",
+          "shape": [
+            4096,
+            4096
+          ],
+          "packed_mib": 8.50006103515625,
+          "io_s": 0.021747612019300668,
+          "dequant_s": 0.41338181818181824,
+          "gemm_s": 4.732363636363636
+        },
+        {
+          "matrix": "o",
+          "shape": [
+            4096,
+            4096
+          ],
+          "packed_mib": 8.50006103515625,
+          "io_s": 0.021747612019300668,
+          "dequant_s": 0.41338181818181824,
+          "gemm_s": 4.732363636363636
+        },
+        {
+          "matrix": "gate",
+          "shape": [
+            14336,
+            4096
+          ],
+          "packed_mib": 29.75006103515625,
+          "io_s": 0.0761162516677387,
+          "dequant_s": 1.4468363636363637,
+          "gemm_s": 16.563272727272725
+        },
+        {
+          "matrix": "up",
+          "shape": [
+            14336,
+            4096
+          ],
+          "packed_mib": 29.75006103515625,
+          "io_s": 0.0761162516677387,
+          "dequant_s": 1.4468363636363637,
+          "gemm_s": 16.563272727272725
+        },
+        {
+          "matrix": "down",
+          "shape": [
+            4096,
+            14336
+          ],
+          "packed_mib": 29.75006103515625,
+          "io_s": 0.0761162516677387,
+          "dequant_s": 1.4468363636363637,
+          "gemm_s": 16.563272727272725
+        }
+      ],
+      "model_packed_gib": 3.8515758514404297,
+      "projected_forward_totals_s": {
+        "io_s": 10.0908544985734,
+        "dequant_s": 191.80916363636365,
+        "gemm_s": 2195.816727272727
+      },
+      "bottleneck": "gemm_s"
+    },
+    "class_26b": {
+      "config": {
+        "hidden": 5120,
+        "intermediate": 20480,
+        "layers": 48
+      },
+      "per_layer_matrices": [
+        {
+          "matrix": "q",
+          "shape": [
+            5120,
+            5120
+          ],
+          "packed_mib": 13.28131103515625,
+          "io_s": 0.03398055594019922,
+          "dequant_s": 0.645909090909091,
+          "gemm_s": 7.394318181818181
+        },
+        {
+          "matrix": "k",
+          "shape": [
+            5120,
+            5120
+          ],
+          "packed_mib": 13.28131103515625,
+          "io_s": 0.03398055594019922,
+          "dequant_s": 0.645909090909091,
+          "gemm_s": 7.394318181818181
+        },
+        {
+          "matrix": "v",
+          "shape": [
+            5120,
+            5120
+          ],
+          "packed_mib": 13.28131103515625,
+          "io_s": 0.03398055594019922,
+          "dequant_s": 0.645909090909091,
+          "gemm_s": 7.394318181818181
+        },
+        {
+          "matrix": "o",
+          "shape": [
+            5120,
+            5120
+          ],
+          "packed_mib": 13.28131103515625,
+          "io_s": 0.03398055594019922,
+          "dequant_s": 0.645909090909091,
+          "gemm_s": 7.394318181818181
+        },
+        {
+          "matrix": "gate",
+          "shape": [
+            20480,
+            5120
+          ],
+          "packed_mib": 53.12506103515625,
+          "io_s": 0.13592175528102052,
+          "dequant_s": 2.583636363636364,
+          "gemm_s": 29.577272727272724
+        },
+        {
+          "matrix": "up",
+          "shape": [
+            20480,
+            5120
+          ],
+          "packed_mib": 53.12506103515625,
+          "io_s": 0.13592175528102052,
+          "dequant_s": 2.583636363636364,
+          "gemm_s": 29.577272727272724
+        },
+        {
+          "matrix": "down",
+          "shape": [
+            5120,
+            20480
+          ],
+          "packed_mib": 53.12506103515625,
+          "io_s": 0.13592175528102052,
+          "dequant_s": 2.583636363636364,
+          "gemm_s": 29.577272727272724
+        }
+      ],
+      "model_packed_gib": 9.960957527160645,
+      "projected_forward_totals_s": {
+        "io_s": 26.096999500985202,
+        "dequant_s": 496.0581818181819,
+        "gemm_s": 5678.836363636363
+      },
+      "bottleneck": "gemm_s"
+    }
+  }
+}
