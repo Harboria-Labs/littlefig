@@ -289,7 +289,7 @@ optimizer = torch.optim.SGD([
 ])
 ```
 
-This fix is implemented in Memory Fabric v0.6 and will be validated in Stage 3.
+This fix is designed but is not present in committed code as of 2026-08-22; Stage 3 validation has not been run.
 
 ### 4.2 Gap 2 — Adapter Delta Generalization
 
@@ -322,16 +322,16 @@ self.B = nn.Parameter(torch.empty(rank, hidden_size))
 nn.init.normal_(self.B, std=0.02)
 ```
 
-This fix is implemented in Memory Fabric v0.6.
+This fix is designed but is not present in committed code as of 2026-08-22.
 
 ### 4.3 Summary: Status of Theoretical Gaps
 
 | Gap | Status | Evidence | Fix Implemented |
 |---|---|---|---|
-| Gap 1 (gate generalization) | Mathematically bridgeable | Synthetic sandbox: gap = 0.001 | Yes — separate gate lr |
-| Gap 2 (adapter delta transfer) | Mathematically bridgeable | Synthetic sandbox: ratio ≥ 0.87 at sim ≥ 0.5 | Yes — B noise init |
+| Gap 1 (gate generalization) | Mathematically bridgeable | Synthetic sandbox: gap = 0.001 | Designed; not committed |
+| Gap 2 (adapter delta transfer) | Mathematically bridgeable | Synthetic sandbox: ratio ≥ 0.87 at sim ≥ 0.5 | Designed; not committed |
 
-Both gaps are confirmed as implementation issues, not fundamental architectural blockers. Stage 3 validates these fixes empirically on the actual model.
+Both gaps are hypothesized implementation issues rather than confirmed architectural blockers. Stage 3 has not validated the designed fixes on an actual model.
 
 ---
 

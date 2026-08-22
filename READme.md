@@ -33,7 +33,7 @@ This repository is part of the **Harboria Labs AI Memory Stack** — a four-part
 
 | Research Finding | Improvement | Validated |
 |---|---|---|
-| **FigMeZO** — inverse error-shaped zeroth-order optimization | −18.6% loss vs standard MeZO | ✓ 3 seeds |
+| **FigMeZO** — inverse error-shaped zeroth-order optimization | −0.16% held-out loss vs standard MeZO | ❌ refuted; not significant, see P1 |
 | **Sensitivity-guided LISA** — weight selection by layer importance | −10% loss vs random LISA | ✓ controlled |
 | **Shared codebook** — reuse one layer's codebook for all | 5× faster loading, 0.1% quality cost | ✓ 50 layers |
 | **Memory Fabric gate fix** — decoupled gate/adapter learning rates | Gate opens in 3 steps (was stuck at 27%) | ✓ synthetic |
@@ -76,7 +76,7 @@ This repository is part of the **Harboria Labs AI Memory Stack** — a four-part
 | Task | Model | RAM Needed |
 |---|---|---|
 | Fine-tune (LoRA) | GPT-2 124M | ~350 MB |
-| Fine-tune (LoRA) | TinyLlama 1.1B | ~400 MB |
+| Fine-tune (LoRA) | TinyLlama 1.1B | 7.154 GiB measured peak RSS (P3) |
 | Fine-tune (LISA) | Gemma 4B | ~3.2 GB |
 | Fine-tune (LoRA) | Llama 3.1 8B | ~3 GB |
 | Memory Fabric write | Any model | +~30 MB (adapters) |

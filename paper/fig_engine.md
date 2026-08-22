@@ -19,9 +19,9 @@ Large language model (LLM) training has become increasingly dependent on high-me
 
 We present Fig Engine, a CPU-native training infrastructure designed to enable efficient fine-tuning of quantized language models on resource-constrained hardware. Rather than treating CPU execution as a fallback, Fig Engine introduces a collection of complementary systems that optimize memory movement, quantization quality, and execution efficiency for commodity processors. The framework consists of FigQuant, an adaptive codebook INT4 quantization method with layer-aware refinement; FigCache, a cache architecture that minimizes repeated unpacking costs by storing intermediate quantization indices; FigSweep, a rolling layer-window execution strategy that bounds active memory during sequential transformer execution; FigKernel, a collection of fused operations compiled through torch.compile; and adaptive training tiers that automatically select optimization strategies according to available system memory.
 
-Beyond the systems architecture, Fig Engine introduces two optimization techniques motivated by empirical analysis of quantized models. FigMeZO demonstrates that perturbing lower-error weight dimensions produces more reliable zeroth-order gradient estimates than perturbing high-error regions, reducing optimization loss by 18.6% relative to conventional MeZO. Sensitivity-Guided LISA allocates layer updates according to measured loss sensitivity rather than uniform sampling, improving parameter-efficient fine-tuning by 10% without increasing memory consumption.
+Beyond the systems architecture, Fig Engine studies two optimization techniques. Corrected five-seed held-out evaluation refuted the original FigMeZO claim: the mean improvement was 0.16%, not statistically significant (t=-0.50), with 2/5 seeds favorable. Sensitivity-Guided LISA has a preliminary single-run 10% result pending multi-seed re-verification.
 
-Experiments on GPT-2 and TinyLlama demonstrate substantial reductions in memory requirements while maintaining competitive training quality. FigQuant achieves 5.3% lower MSE than fixed NF4 on all 50 GPT-2 weight matrices and wins all 156 layers on TinyLlama 1.1B. A GPU benchmark demonstrates FigQuant trains 7× faster than industry-standard BnB NF4 QLoRA on TinyLlama 1.1B while maintaining competitive loss quality.
+Experiments on GPT-2 and TinyLlama demonstrate substantial reductions in memory requirements while maintaining competitive training quality. FigQuant achieves 5.3% lower MSE than fixed NF4 on all 50 GPT-2 weight matrices and wins all 156 layers on TinyLlama 1.1B. A GPU benchmark reports 7× faster training while using 10,181 MB versus 2,441–3,585 MB for the baselines (roughly 3–4× more GPU memory).
 
 Fig Engine establishes CPU-first training as a practical systems problem rather than a degraded GPU implementation, and provides the training infrastructure enabling Memory Fabric — the companion neural memory architecture described in a separate paper — to perform continuous weight-space memory writes on commodity hardware.
 
@@ -51,9 +51,9 @@ This paper makes the following contributions:
 
 4. **FigKernel** — a collection of compiled fused operators via torch.compile that reduce memory allocation and improve execution efficiency across RMSNorm (2.95× speedup), activation, chunked cross-entropy, and fused linear+LoRA operations.
 
-5. **Adaptive Training Tiers** — automatic selection of fine-tuning strategies (LoRA, LISA, MeZO, LOMO) according to available memory resources, enabling the same codebase to run from 400 MB to 8 GB.
+5. **Adaptive Training Tiers** — automatic selection of fine-tuning strategies (LoRA, LISA, MeZO, LOMO) according to available memory resources. The measured TinyLlama lowram path peaks at 7.154205 GiB; earlier sub-GiB tier estimates are unverified.
 
-6. **FigMeZO** — an inverse error-shaped zeroth-order optimization strategy demonstrating that perturbations concentrated in lower-error weight regions produce more reliable gradient estimates than perturbations targeting high-error regions. 18.6% loss reduction over standard MeZO, validated across 3 seeds.
+6. **FigMeZO** — an inverse error-shaped zeroth-order optimization hypothesis. Corrected held-out evaluation found a non-significant 0.16% mean improvement; the original 18.6% claim is refuted.
 
 7. **Sensitivity-Guided LISA** — a layer-selection strategy that allocates training effort according to measured loss sensitivity rather than uniform random sampling. 10% loss reduction over random LISA with no additional memory overhead.
 
@@ -73,7 +73,9 @@ Although these methods dramatically decrease trainable parameter counts, they co
 
 Weight quantization has become a standard technique for reducing the storage and inference cost of large language models. Uniform INT4 quantization provides aggressive compression but often introduces substantial reconstruction error due to the highly non-uniform distribution of transformer weights. NF4 [Dettmers et al., 2023] addressed this by introducing a fixed non-uniform codebook derived from a normal distribution. More recent methods, including AWQ [Lin et al., 2024] and GPTQ, optimize quantization through activation-aware or reconstruction-aware procedures.
 
-FigQuant differs from these approaches by adapting the quantization codebook to the empirical weight distribution of each model. Rather than treating the NF4 codebook as fixed, FigQuant initializes from the NF4 distribution and refines the codebook using k-means optimization, consistently reducing reconstruction error while remaining compatible with efficient INT4 execution.
+FigQuant's defensible distinction is its specific NF4-seeded per-layer refinement and measured TinyLlama result, not the general idea of learned codebooks. LUT-Q learns layer dictionaries with gradient and k-means updates; BOF4/BOF4-S derives block-wise optimal 4-bit codebooks; and LO-BCQ iteratively refines clustered LLM codebooks.
+
+ZeRO-Offload, ZeRO-Infinity, and ZeRO-Inference use CPU/NVMe as overflow tiers for GPU-bound execution. FlexGen optimizes GPU/CPU/disk placement for inference throughput. llama.cpp/GGML provides CPU-native quantized GEMM for inference only, without training activations or backward kernels. Fig Engine instead targets pure-CPU training; any future fused training kernel must add backward support.
 
 ### 2.3 CPU Training
 
@@ -83,7 +85,7 @@ This design leaves several CPU-specific challenges unaddressed, including repeat
 
 ### 2.4 Zeroth-Order Optimization
 
-Zeroth-order optimization methods estimate gradients through function evaluations rather than explicit backpropagation. MeZO [Malladi et al., 2023] demonstrated that forward-pass-only optimization can successfully fine-tune language models while significantly reducing memory requirements. Conventional MeZO samples perturbation directions uniformly across parameter space, implicitly assuming all weight dimensions contribute equally to gradient estimation quality. FigMeZO challenges this assumption and demonstrates the opposite strategy is more effective.
+Zeroth-order optimization methods estimate gradients through function evaluations rather than explicit backpropagation. MeZO [Malladi et al., 2023] demonstrated forward-pass-only fine-tuning. QZO (arXiv:2505.13430) and QuZO (arXiv:2502.12346) independently combine quantization with zeroth-order optimization. FigMeZO tested a different error-shaped perturbation distribution, but its original performance claim was refuted.
 
 ### 2.5 Layer Selection Strategies
 
@@ -235,12 +237,14 @@ Fig Engine automatically selects an optimization strategy according to available
 
 | Tier | Method | Memory (1.1B) | Design Objective |
 |---|---|---|---|
-| 1 | Streaming LoRA | ~400 MB | Minimum memory |
+| 1 | Streaming LoRA | 7.154205 GiB measured peak RSS | Minimum-memory tested path |
 | 2 | Sensitivity-Guided LISA | ~900 MB | Improved convergence |
 | 3 | FigMeZO | ~600 MB | Gradient-free training |
 | 4 | LOMO | ~800 MB | Maximum adaptation quality |
 
 Each tier inherits the same execution infrastructure: FigQuant, FigCache, FigSweep, and FigKernel. The distinction lies only in the optimization strategy applied to trainable parameters.
+
+Only the TinyLlama Streaming-LoRA figure above is measured end to end. The remaining tier-memory entries are architectural estimates pending validation.
 
 ---
 
@@ -286,11 +290,15 @@ High-sensitivity layers receive proportionally greater optimization attention.
 
 **Observed block sensitivity (GPT-2):** Block 0 = 0.053, Block 4 = 0.049, Block 6 = 0.052 (high sensitivity, early layers); Block 10 = 0.013, Block 11 = 0.012 (low sensitivity, late layers).
 
+This quality result is from a single run and remains pending the planned multi-seed P4c re-verification.
+
 ### 5.3 Shared Codebook Initialization
 
 Per-layer adaptive refinement improves reconstruction quality at the cost of k-means computation for every quantized layer. Analysis shows that refined codebooks across all GPT-2 layers converge to remarkably similar solutions: pairwise L2 distances between optimized codebooks remain within 0.019 across all 50 layers.
 
 **Shared mode.** The first transformer layer performs standard adaptive refinement. Its optimized codebook initializes all remaining layers, which perform only index assignment (no k-means). This reduces model loading time by 5.1× at the cost of +3.1% MSE.
+
+This loading result is from a single run and has not been independently re-verified; no rerun is currently scheduled.
 
 | Mode | Avg MSE | Load Time | Quality vs NF4 |
 |---|---|---|---|
@@ -360,7 +368,7 @@ To validate FigQuant's training efficiency beyond CPU, all methods were evaluate
 | BnB NF4 QLoRA (industry default) | 0.2399 | 1423s | 2,441 MB | 0.9× |
 | **FigQuant LoRA (lowram mode)** | **0.2475** | **184s** | **10,181 MB** | **7.1×** |
 
-FigQuant is 7× faster than both FP16 and NF4 on GPU. The speed advantage comes from FigQuant's fused dequant-matmul path, which avoids the overhead of bitsandbytes' per-tensor quantization cycle. Loss is competitive: only 10% higher than FP16 (0.2475 vs 0.2252) while matching NF4 quality (0.2475 vs 0.2399).
+FigQuant is 7× faster than both FP16 and NF4 on GPU while using 10,181 MB versus 2,441–3,585 MB for the baselines (roughly 3–4× more GPU memory). This is a speed-memory tradeoff, not a free win.
 
 Higher GPU memory in lowram mode results from temporary FP32 tensors during dequantization on each forward pass. The figcache mode is expected to reduce this substantially while maintaining the speed advantage.
 
@@ -371,11 +379,11 @@ Perplexity on wikitext-2: FP32 = 32.81, FigQuant = 35.33 (+7.7%, typical for INT
 | Model | Conventional Training | Fig Engine Tier 1 | Reduction |
 |---|---|---|---|
 | GPT-2 (124M) | 3.48 GB | ~350 MB | 10× |
-| TinyLlama (1.1B) | 26.6 GB | ~400 MB | 66× |
+| TinyLlama (1.1B) | 26.6 GB | 7.154205 GiB measured peak RSS | 8 GiB budget met; 0.845795 GiB headroom |
 | Gemma 4B | 96.9 GB | ~1.5 GB | 65× |
 | Llama 3.1 8B | 193.7 GB | ~3 GB | 64× |
 
-These estimates include quantized backbone weights with parameter-efficient adaptation. Reductions are sufficient to enable fine-tuning on hardware that would otherwise be incapable of loading the model.
+The TinyLlama result is measured by `figengine_8gb_lowram_results.json`; incremental RSS was 6.940331 GiB, 17.35× the discarded ~400 MB estimate. The Gemma and Llama figures are architectural estimates, not measured results; no run has been performed on Gemma or Llama at this time.
 
 ### 6.5 FigCache Performance
 
@@ -404,6 +412,8 @@ All three modes produce numerically identical outputs. FigCache achieves 75% mem
 
 Results averaged across 3 seeds, GPT-2 (124M), 100 Alpaca steps. Contrary to the original hypothesis, emphasizing high-error regions consistently degraded optimization. The inverse strategy produced the lowest loss, validating that signal reliability matters more than error magnitude.
 
+**Correction.** Corrected five-seed held-out evaluation (`benchmark/experiment_figmezo_v2.py`, `benchmark/figmezo_v2_results.json`) found only −0.16%, t=−0.50, with 2/5 seeds favorable. The −18.6% table is historical and refuted.
+
 ### 6.8 Sensitivity-Guided LISA
 
 | Method | Avg Loss (last 20 steps) | vs Random |
@@ -412,6 +422,8 @@ Results averaged across 3 seeds, GPT-2 (124M), 100 Alpaca steps. Contrary to the
 | **Sensitivity-Guided LISA** | **2.17** | **−10%** |
 
 GPT-2 (124M), 60 Alpaca steps. Transformer layers contribute unequally to adaptation: measuring influence before optimization allows resources to be concentrated where updates have the greatest effect.
+
+This −10% result is from a single run and remains pending the planned multi-seed P4c re-verification.
 
 ### 6.9 End-to-End CPU Fine-Tuning
 
@@ -431,7 +443,7 @@ The experimental results demonstrate that the contributions of Fig Engine are co
 
 **Manual configuration.** Parameters such as quantization group size, FigSweep window length, and cache strategy currently require heuristic selection based on available hardware. Future work may explore adaptive runtime policies.
 
-**Validation breadth.** FigMeZO and Sensitivity-Guided LISA demonstrate consistent improvements across GPT-2 and TinyLlama. Broader validation across larger model families and diverse downstream tasks remains important future work.
+**Validation breadth.** FigMeZO's original improvement was refuted, and Sensitivity-Guided LISA remains a single-run result pending multi-seed verification.
 
 ---
 
@@ -470,6 +482,14 @@ More broadly, Fig Engine provides the computational foundation for continual lea
 7. 0xticketguy (Harboria Labs). "Ember's Diaries: An Immutable Cognitive Database Engine for Grounded AI Memory." 2026. https://github.com/Harboria-Labs/embers-diaries
 8. 0xticketguy (Harboria Labs). "Memory Fabric: Neural Weight-Space Implementation of Ember's Diaries." 2026. https://github.com/Harboria-Labs/littlefig
 9. 0xticketguy (Harboria Labs). "CogMemBench: A Benchmark for Continuous Cognitive Memory in Large Language Models." 2026. https://github.com/Harboria-Labs/littlefig/tree/main/cogmembench
+10. Rajbhandari, S., et al. "ZeRO-Offload / ZeRO-Infinity / ZeRO-Inference." Microsoft DeepSpeed.
+11. Sheng, Y., et al. "FlexGen." ICML 2023.
+12. Gerganov, G., et al. "llama.cpp / GGML."
+13. "QZO: Quantized Zeroth-Order Optimization." arXiv:2505.13430, 2025.
+14. "QuZO." arXiv:2502.12346, 2025.
+15. Cardinaux, F., et al. "LUT-Q." arXiv:1811.05355; IEEE J-STSP 2020.
+16. Blumenberg, et al. "BOF4 / BOF4-S." arXiv:2505.06653, 2025.
+17. Elangovan, et al. "LO-BCQ." arXiv:2502.05376, 2025.
 
 ---
 

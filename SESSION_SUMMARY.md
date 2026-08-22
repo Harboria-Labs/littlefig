@@ -5,6 +5,20 @@ _Last updated: 2026-08-18 (Africa/Lagos)_
 This is the durable cross-session handoff. Read it with `RESEARCH_PROGRESS.md` when
 resuming work, and append a dated entry after each substantive session.
 
+## P6-C0 — 2026-08-22 paper/README correction pass
+
+✅ Completed the pre-P6 correction item across `READme.md`, `paper/fig_engine.md`,
+and `paper/memory_fabric.md`. FigMeZO now reports the committed corrected result
+(−0.16%, t=−0.50, 2/5 seeds favorable) rather than −18.6%. TinyLlama memory now
+uses the measured P3 peak of 7.154205 GiB with 0.845795 GiB headroom; the GPU 7×
+claim now states its 10,181 MB versus 2,441–3,585 MB tradeoff. Gemma/Llama memory
+figures are explicitly unmeasured estimates. LISA and shared-codebook results are
+labeled single-run/pending re-verification. Memory Fabric's gate-LR and B-init
+changes are labeled designed but absent from committed code. Related work now
+covers ZeRO offload systems, FlexGen, llama.cpp/GGML, QZO, QuZO, LUT-Q, BOF4, and
+LO-BCQ. Unverified AAAC/CAQ-ZO names were intentionally omitted. This item changes
+claims/documentation only; it adds no new empirical result.
+
 ## Current objective
 
 Execute the P4 FigSweep/storage-backed memory investigation in strict order,

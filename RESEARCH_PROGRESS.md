@@ -6,6 +6,14 @@ This file tracks the state of the Harboria Labs AI Memory Stack research: what e
 paper claims, what is actually proven in code, and the plan to (1) verify/prove the
 papers, then (2) advance them.
 
+## Current Fig Engine research question (P6)
+
+> Can a quantized language model be trained (not just inferred) on pure CPU with model
+> weights residing predominantly in secondary storage, while keeping a bounded RAM
+> working set, through tiled reconstruction, selective layer updates (LISA), activation
+> checkpointing, and (eventually) fused INT4 dequant+GEMM kernels — targeting models in
+> the 4B–26B range on machines with 8–16 GB RAM?
+
 ---
 
 ## The four-layer stack (where we come from)
@@ -366,6 +374,16 @@ isolated memory-saving variant with a genuine CPU throughput cost. It is not wir
 into `linear.py`, and no full P3 TinyLlama rerun has been performed.
 
 ## Open log
+- **P6-C0, 2026-08-22 — ✅ paper/README correction pass complete.** Corrected
+  FigMeZO from −18.6%/3-seed validated to the committed five-seed held-out result
+  (−0.16%, t=−0.50, 2/5 favorable); replaced TinyLlama's ~400 MB claim with the
+  measured 7.154205 GiB peak and 0.845795 GiB 8-GiB headroom; paired the GPU 7×
+  speed claim with 10,181 MB versus 2,441–3,585 MB baseline memory; labeled Gemma
+  4B/Llama 8B reductions as unmeasured estimates; labeled LISA −10% and shared
+  codebook 5.1× as single-run pending verification; corrected both Memory Fabric
+  fixes to designed/not committed; and added ZeRO, FlexGen, llama.cpp/GGML, QZO,
+  QuZO, LUT-Q, BOF4, and LO-BCQ related work. AAAC and CAQ-ZO were not cited because
+  their identities remain unverified. No benchmark result was changed or invented.
 - 2026-08-22 - **P5c V3 slowdown profile: compute/backend cost, not primarily Python overhead.** On the 5632x2048 MLP case (`tile=128`, 44 tiles), one-tile reconstruction averaged `0.322 ms`, implying `~14.2 ms` for 44 tiles. The complete `tiled_weight()` loop including list allocation and concatenation took `284.2 ms`. The subsequent BF16 `F.linear` took `3253.5 ms`; observed V3 case wall time was ~2.6-2.8 s. Python loop overhead exists but cannot explain the slowdown; BF16 CPU matmul/backend performance dominates. No `torch.compile` loop experiment was pursued because overhead is not dominant. V3 remains an isolated memory win with a genuine CPU throughput tradeoff; do not wire it into `linear.py` yet.
 - 2026-08-22 - **P5c corrected gate completed.** The harness now uses production
   `n_iters=8`, direct dequantized-weight RMSE/MSE as `correctness_pass`, and keeps
