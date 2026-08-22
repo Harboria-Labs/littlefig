@@ -375,6 +375,14 @@ into `linear.py`, and no full P3 TinyLlama rerun has been performed.
 
 ## Open log
 
+- 2026-08-22 - Restart/resume instruction: the user will run the P6a Colab notebook
+  while P6a is also measured on this PC after reboot and disk recovery. Store Colab
+  and PC results separately with their hardware context, compare them only after both
+  exist, and do not start P6b until P6a is recorded/committed/surfaced. Earlier P-stage
+  experiments may also be replicated locally as additional hardware evidence, but
+  those replications must not bypass or reorder the P6 gates and must not replace the
+  existing Colab results.
+
 - 2026-08-22 - P6a Colab handoff created: `benchmark/P6a_Envelope_Colab.ipynb`.
   It runs the actual sequential-read measurement and P6a envelope projection on
   Colab, saves JSON to Drive, and prints per-model I/O/dequant/GEMM totals. No new

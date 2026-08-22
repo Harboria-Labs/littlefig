@@ -8,6 +8,31 @@ resuming work, and append a dated entry after each substantive session.
 Notebook handoff convention: whenever a new Colab notebook is created, always give
 the user its direct Colab URL after pushing it; do not provide only a repository path.
 
+## 2026-08-22 restart handoff: P6a Colab + local-PC validation
+
+The user is restarting the PC to recover disk space. Resume from P6a; do not start
+P6b yet. Part A corrections are complete and pushed (`9e00c58`). The P6a envelope
+script is committed (`a9c43f1`) and its Colab notebook is committed (`3e676ac`).
+Direct notebook URL:
+`https://colab.research.google.com/github/Harboria-Labs/littlefig/blob/research/p1-figmezo-verify/benchmark/P6a_Envelope_Colab.ipynb`.
+
+After restart, first read `RESEARCH_PROGRESS.md` and this file in full, then check
+free disk space. The user will run P6a in Colab while the agent also runs the same
+P6a script on this PC, using measured local sequential-read bandwidth rather than an
+assumed value. Preserve both results as separate hardware records; do not combine or
+silently substitute one for the other. Save the local durable JSON at
+`benchmark/envelope_v1_results.json`. Record hardware/runtime context and compare the
+Colab and PC bottleneck verdicts when both are available.
+
+The user also authorizes local-PC validation of earlier P sections that were already
+tested elsewhere, where this machine can run them. Treat these as additional hardware
+replications, not replacements for committed Colab evidence. Keep the main P6 gating
+order unchanged: finish, record, commit, push, and surface P6a before P6b; then P6b,
+P6c, P6d/P6e, P6f, and P6g only if P6a shows I/O is binding. Never invent results when
+the PC lacks RAM, dependencies, Linux-only behavior, GPU capability, or target model
+access. Each substantive item still requires its own dated entry in both tracker files
+and its own `research(P6x): ...` commit.
+
 ## P6-C0 — 2026-08-22 paper/README correction pass
 
 ✅ Completed the pre-P6 correction item across `READme.md`, `paper/fig_engine.md`,
