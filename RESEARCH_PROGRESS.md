@@ -374,6 +374,11 @@ isolated memory-saving variant with a genuine CPU throughput cost. It is not wir
 into `linear.py`, and no full P3 TinyLlama rerun has been performed.
 
 ## Open log
+
+- 2026-08-22 - P6a Colab handoff created: `benchmark/P6a_Envelope_Colab.ipynb`.
+  It runs the actual sequential-read measurement and P6a envelope projection on
+  Colab, saves JSON to Drive, and prints per-model I/O/dequant/GEMM totals. No new
+  measurement is claimed until the notebook is run; P6b remains gated.
 - **P6a, 2026-08-22 — ⏳ blocked before measurement.** Added `benchmark/experiment_envelope_v1.py` with explicit reference shapes for Gemma-class 4B (`hidden=2560, intermediate=10240, layers=34`), 8B-class Llama (`4096, 14336, 32`), and 26B-class (`5120, 20480, 48`). It derives dequant/GEMM rates from committed P5c and measures sequential read bandwidth locally. The 512 MiB read fixture failed with Windows `OSError: [Errno 28] No space left on device`. No bandwidth, bottleneck, or envelope verdict is claimed. P6b and later remain gated until P6a runs with sufficient free storage; no assumed bandwidth may substitute.
 - **P6-C0, 2026-08-22 — ✅ paper/README correction pass complete.** Corrected
   FigMeZO from −18.6%/3-seed validated to the committed five-seed held-out result

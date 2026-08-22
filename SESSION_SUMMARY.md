@@ -5,6 +5,9 @@ _Last updated: 2026-08-18 (Africa/Lagos)_
 This is the durable cross-session handoff. Read it with `RESEARCH_PROGRESS.md` when
 resuming work, and append a dated entry after each substantive session.
 
+Notebook handoff convention: whenever a new Colab notebook is created, always give
+the user its direct Colab URL after pushing it; do not provide only a repository path.
+
 ## P6-C0 — 2026-08-22 paper/README correction pass
 
 ✅ Completed the pre-P6 correction item across `READme.md`, `paper/fig_engine.md`,
