@@ -458,3 +458,13 @@ JSON, and no honest I/O-versus-dequant-versus-GEMM bottleneck verdict yet. This 
 environmental block, not evidence that I/O or compute dominates. P6b and every later
 stage remain gated until P6a is rerun on the actual target hardware with sufficient
 storage. No substitute bandwidth number or invented conclusion was used.
+## 2026-08-22 P6a Colab result
+
+Colab measured conservative sequential read bandwidth of **4.174697 GiB/s** from
+three 512 MiB reads (4.313367, 4.174697, 5.328405 GiB/s). Using the committed P5c
+rates, projected forward totals were: Gemma-class 4B I/O **0.423 s**, dequant
+**87.844 s**, GEMM **1005.627 s**; 8B I/O **0.923 s**, dequant **191.809 s**, GEMM
+**2195.817 s**; 26B I/O **2.386 s**, dequant **496.058 s**, GEMM **5678.836 s**.
+Verdict: **✅ proven Colab envelope; GEMM bottleneck at all scales**. This is a
+projection, not a full-model run. Local-PC replication remains pending after reboot;
+P6b stays gated.

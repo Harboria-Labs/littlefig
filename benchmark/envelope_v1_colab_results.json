@@ -1,0 +1,12 @@
+{
+  "environment": "Google Colab CPU runtime",
+  "measurement_date": "2026-08-22",
+  "read_bandwidth_gib_s": [4.3133668244, 4.1746974277, 5.3284045449],
+  "conservative_read_bandwidth_gib_s": 4.1746974277,
+  "models": {
+    "gemma_class_4b": {"io_s": 0.422529, "dequant_s": 87.843636, "gemm_s": 1005.627273, "bottleneck": "gemm_s"},
+    "llama_class_8b": {"io_s": 0.922600, "dequant_s": 191.809164, "gemm_s": 2195.816727, "bottleneck": "gemm_s"},
+    "class_26b": {"io_s": 2.386031, "dequant_s": 496.058182, "gemm_s": 5678.836364, "bottleneck": "gemm_s"}
+  },
+  "verdict": "GEMM is the projected bottleneck at all three scales; local-PC replication pending."
+}

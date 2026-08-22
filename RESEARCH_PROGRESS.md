@@ -503,3 +503,8 @@ into `linear.py`, and no full P3 TinyLlama rerun has been performed.
   lower MSE vs NF4. TinyLlama 156/156 result still pending.
 
 - 2026-08-06 — Initial codebase + 4-paper review. Found contradictions #1–#4 above.
+- 2026-08-22 - P6a Colab completed: conservative sequential read bandwidth
+  **4.174697 GiB/s**. Projected totals were Gemma 4B I/O/dequant/GEMM
+  **0.422529/87.843636/1005.627273 s**, 8B **0.922600/191.809164/2195.816727 s**,
+  and 26B **2.386031/496.058182/5678.836364 s**. Verdict: **✅ proven Colab
+  envelope; GEMM bottleneck at all scales**. Local-PC replication pending; P6b gated.
